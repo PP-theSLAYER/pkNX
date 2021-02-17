@@ -9,15 +9,29 @@ namespace pkNX.Game
     /// </summary>
     public abstract class GameManager
     {
-        private readonly GameLocation ROM;
-        private readonly TextManager Text; // GameText
-        private readonly GameFileMapping FileMap;
+        protected readonly GameLocation ROM;
+        protected readonly TextManager Text; // GameText
+        protected readonly GameFileMapping FileMap;
         public readonly GameInfo Info;
+        private int _language;
+
+        public string PathExeFS => ROM.ExeFS;
+        public string PathRomFS => ROM.RomFS;
 
         /// <summary>
         /// Language to use when fetching string &amp; graphic assets.
         /// </summary>
-        public int Language { get; set; }
+        public int Language
+        {
+            get => _language;
+            set
+            {
+                if (value == _language)
+                    return;
+                _language = value;
+                Text?.ClearCache();
+            }
+        }
 
         /// <summary>
         /// Current <see cref="GameVersion"/> the data represents.
@@ -39,6 +53,7 @@ namespace pkNX.Game
             ROM = rom;
             Language = language;
             FileMap = new GameFileMapping(rom);
+            SetMitm();
             Initialize();
             Text = new TextManager(Game);
             Info = new GameInfo(Game);
@@ -77,12 +92,15 @@ namespace pkNX.Game
         /// <param name="closing">Skip re-initialization of game data.</param>
         public void SaveAll(bool closing)
         {
+            Terminate();
             FileMap.SaveAll();
             if (!closing)
                 Initialize();
         }
 
         protected abstract void Initialize();
+        protected abstract void Terminate();
+        protected abstract void SetMitm();
 
         public FolderContainer GetFilteredFolder(GameFile type, Func<string, bool> filter = null)
         {
@@ -93,13 +111,13 @@ namespace pkNX.Game
 
         public static GameManager GetManager(GameLocation loc, int language)
         {
-            switch (loc.Game)
+            return loc.Game switch
             {
-                case GameVersion.GG:
-                    return new GameManagerGG(loc, language);
-                default:
-                    throw new ArgumentException(nameof(loc.Game));
-            }
+                GameVersion.GG => new GameManagerGG(loc, language),
+                GameVersion.SW => new GameManagerSWSH(loc, language),
+                GameVersion.SH => new GameManagerSWSH(loc, language),
+                _ => throw new ArgumentException(nameof(loc.Game))
+            };
         }
     }
 }

@@ -16,9 +16,12 @@ namespace pkNX.WinForms
     public partial class BTTE : Form
     {
         private readonly LearnsetRandomizer learn;
-        private string[][] AltForms;
+        private readonly string[][] AltForms;
+        private readonly PictureBox[] pba;
+
         private int entry = -1;
-        private PictureBox[] pba;
+        private TrainerPoke pkm = new TrainerPoke7b();
+        private bool loadingPKM;
 
         private readonly PersonalTable Personal;
         private readonly GameManager Game;
@@ -38,11 +41,15 @@ namespace pkNX.WinForms
         public BTTE(GameManager game, TrainerEditor editor)
         {
             InitializeComponent();
+            pba = new[] { PB_Team1, PB_Team2, PB_Team3, PB_Team4, PB_Team5, PB_Team6 };
 
             Stats.Personal = Personal = game.Data.PersonalData;
             Game = game;
             Trainers = editor;
             learn = new LearnsetRandomizer(game.Info, game.Data.LevelUpData.LoadAll(), Personal);
+
+            AltForms = new byte[Personal.TableLength]
+                .Select(_ => Enumerable.Range(0, 32).Select(i => i.ToString()).ToArray()).ToArray();
 
             trClass = Game.GetStrings(TextName.TrainerClasses);
             trName = Game.GetStrings(TextName.TrainerClasses);
@@ -55,8 +62,10 @@ namespace pkNX.WinForms
             natures = Game.GetStrings(TextName.Natures);
             trName = Game.GetStrings(TextName.TrainerNames);
             trClass = Game.GetStrings(TextName.TrainerClasses);
+            movelist = EditorUtil.SanitizeMoveList(movelist);
 
-            AIBits = new[] {CHK_AI0, CHK_AI1, CHK_AI2, CHK_AI3, CHK_AI4, CHK_AI5, CHK_AI6, CHK_AI7};
+            AIBits = Game.Info.SWSH ? new[] { CHK_AI_Basic, CHK_AI_Strong, CHK_AI_Expert, CHK_AI_Double, CHK_AI_Raid, CHK_AI_Allowance, CHK_AI_PokeChange, CHK_AI_FireGym1, CHK_AI_FireGym2, CHK_AI_Unused1, CHK_AI_Item, CHK_AI_FireGym3, CHK_AI_Unused2 }
+                                    : new[] { CHK_AI_Basic, CHK_AI_Strong, CHK_AI_Expert, CHK_AI_Double, CHK_AI_Allowance, CHK_AI_Item, CHK_AI_PokeChange, CHK_AI_Unused1 };
 
             mnuView.Click += ClickView;
             mnuSet.Click += ClickSet;
@@ -70,6 +79,9 @@ namespace pkNX.WinForms
             PG_Moves.SelectedObject = EditUtil.Settings.Move;
             PG_RTrainer.SelectedObject = EditUtil.Settings.Trainer;
             PG_Species.SelectedObject = EditUtil.Settings.Species;
+
+            L_Gift.Visible = CB_Gift.Visible = NUD_GiftCount.Visible = Game.Info.GG;
+            GB_Additional_AI.Visible = Game.Info.SWSH;
         }
 
         public bool Modified { get; set; }
@@ -103,8 +115,7 @@ namespace pkNX.WinForms
             var pk = Trainers[entry].Team[slot];
             if (pk.Species != 0)
             {
-                try { PopulateFields(pk); }
-                catch { }
+                PopulateFields(pk);
                 // Visual to display what slot is currently loaded.
                 GetSlotColor(slot, Sprites.Properties.Resources.slotView);
             }
@@ -165,8 +176,10 @@ namespace pkNX.WinForms
 
         private static void GetQuickFiller(PictureBox pb, TrainerPoke pk)
         {
-            var rawImg = SpriteBuilder.GetSprite(pk.Species, pk.Form, pk.Gender, pk.HeldItem, false, pk.Shiny);
-            pb.Image = ImageUtil.ScaleImage((Bitmap)rawImg, 2);
+            if (pk is TrainerPoke8 c)
+                pb.Image = SpriteUtil.GetSprite(c.Species, c.Form, c.Gender, c.HeldItem, false, c.Shiny, c.CanGigantamax);
+            else
+                pb.Image = SpriteUtil.GetSprite(pk.Species, pk.Form, pk.Gender, pk.HeldItem, false, pk.Shiny, false);
         }
 
         // Top Level Functions
@@ -174,8 +187,10 @@ namespace pkNX.WinForms
         {
             if (entry < 0)
                 return;
-            pkm.Form = CB_Forme.SelectedIndex;
             RefreshPKMSlotAbility();
+            if (loadingPKM)
+                return;
+            pkm.Form = CB_Forme.SelectedIndex;
 
             if (!Stats.UpdatingFields)
                 Stats.UpdateStats();
@@ -185,8 +200,10 @@ namespace pkNX.WinForms
         {
             if (entry < 0)
                 return;
-            pkm.Species = (ushort)CB_Species.SelectedIndex;
             FormUtil.SetForms(CB_Species.SelectedIndex, CB_Forme, AltForms);
+            if (loadingPKM)
+                return;
+            pkm.Species = (ushort)CB_Species.SelectedIndex;
             RefreshPKMSlotAbility();
 
             if (!Stats.UpdatingFields)
@@ -215,11 +232,9 @@ namespace pkNX.WinForms
 
         private void Setup()
         {
-            AltForms = new byte[Personal.TableLength]
-                .Select(_ => Enumerable.Range(0, 32).Select(i => i.ToString()).ToArray()).ToArray();
             CB_TrainerID.Items.Clear();
             for (int i = 0; i < Trainers.Length; i++)
-                CB_TrainerID.Items.Add(GetEntryTitle(trName[i] ?? "UNKNOWN", i));
+                CB_TrainerID.Items.Add(GetEntryTitle(trName[i], i));
 
             CB_Trainer_Class.Items.Clear();
             for (int i = 0; i < trClass.Length; i++)
@@ -227,7 +242,6 @@ namespace pkNX.WinForms
 
             specieslist[0] = "---";
             abilitylist[0] = itemlist[0] = movelist[0] = "(None)";
-            pba = new[] {PB_Team1, PB_Team2, PB_Team3, PB_Team4, PB_Team5, PB_Team6};
 
             CB_Species.Items.AddRange(specieslist);
 
@@ -260,7 +274,6 @@ namespace pkNX.WinForms
 
             CB_TrainerID.SelectedIndex = 0;
             entry = 0;
-            pkm = new TrainerPoke7b();
             PopulateFields(pkm);
         }
 
@@ -302,13 +315,11 @@ namespace pkNX.WinForms
             CB_TrainerID.Items[entry] = GetEntryTitle(str, entry);
         }
 
-        private TrainerPoke pkm;
-
         private void PopulateFields(TrainerPoke pk)
         {
             pkm = pk.Clone();
 
-            Stats.UpdatingFields = true;
+            Stats.UpdatingFields = loadingPKM = true;
 
             CB_Species.SelectedIndex = pkm.Species;
             CB_Forme.SelectedIndex = pkm.Form;
@@ -324,20 +335,25 @@ namespace pkNX.WinForms
             CB_Move3.SelectedIndex = pkm.Move3;
             CB_Move4.SelectedIndex = pkm.Move4;
 
-            if (pk is TrainerPoke7b b)
+            if (pkm is TrainerPoke7b b)
             {
                 CHK_CanMega.Checked = b.CanMegaEvolve;
                 NUD_MegaForm.Value = b.MegaFormChoice;
-                FLP_HeldItem.Visible = FLP_Ability.Visible = false;
                 NUD_Friendship.Value = b.Friendship;
+                FLP_Friendship.Visible = FLP_Mega.Visible = true;
+                FLP_HeldItem.Visible = FLP_Ability.Visible = FLP_CanDynamax.Visible = false;
             }
-            else
+            else if (pkm is TrainerPoke8 c)
             {
+                CHK_CanDynamax.Checked = c.CanDynamax;
+                Stats.CB_DynamaxLevel.SelectedIndex = c.DynamaxLevel;
+                Stats.CHK_Gigantamax.Checked = c.CanGigantamax;
                 FLP_Friendship.Visible = FLP_Mega.Visible = false;
-                FLP_HeldItem.Visible = FLP_Ability.Visible = true;
+                FLP_HeldItem.Visible = FLP_Ability.Visible = FLP_CanDynamax.Visible = true;
             }
 
-            Stats.LoadStats(pk);
+            Stats.LoadStats(pkm);
+            loadingPKM = false;
         }
 
         private TrainerPoke PreparePKM()
@@ -357,10 +373,18 @@ namespace pkNX.WinForms
             pk.Move3 = CB_Move3.SelectedIndex;
             pk.Move4 = CB_Move4.SelectedIndex;
 
-            if (pk is TrainerPoke7b b)
+            switch (pk)
             {
-                b.CanMegaEvolve = CHK_CanMega.Checked;
-                b.MegaFormChoice = (int) NUD_MegaForm.Value;
+                case TrainerPoke7b b:
+                    b.CanMegaEvolve = CHK_CanMega.Checked;
+                    b.MegaFormChoice = (int) NUD_MegaForm.Value;
+                    b.Friendship = (int) NUD_Friendship.Value;
+                    break;
+                case TrainerPoke8 c:
+                    c.CanDynamax = CHK_CanDynamax.Checked;
+                    c.DynamaxLevel = (byte) Stats.CB_DynamaxLevel.SelectedIndex;
+                    c.CanGigantamax = Stats.CHK_Gigantamax.Checked;
+                    break;
             }
 
             return pk;
@@ -368,6 +392,14 @@ namespace pkNX.WinForms
 
         private void PopulateFieldsTrainer(TrainerData tr)
         {
+            // some trainers have trclasses without corresponding trnames in the text, so add them
+            if (Game.Info.SWSH)
+            {
+                var classes = CB_Trainer_Class.Items;
+                for (int i = classes.Count; i <= 253; i++)
+                    classes.Add($"{trClass[1]} - {i} *");
+            }
+
             // Load Trainer Data
             CB_Trainer_Class.SelectedIndex = tr.Class;
             CB_Item_1.SelectedIndex = tr.Item1;
@@ -375,6 +407,7 @@ namespace pkNX.WinForms
             CB_Item_3.SelectedIndex = tr.Item3;
             CB_Item_4.SelectedIndex = tr.Item4;
             CB_Money.SelectedIndex = tr.Money;
+            CB_Mode.SelectedIndex = (int)tr.Mode;
             LoadAIBits(tr.AI);
             if (tr is TrainerData7b b)
             {
@@ -391,7 +424,8 @@ namespace pkNX.WinForms
             tr.Item3 = CB_Item_3.SelectedIndex;
             tr.Item4 = CB_Item_4.SelectedIndex;
             tr.Money = CB_Money.SelectedIndex;
-            tr.AI = SaveAIBits();
+            tr.Mode = (BattleMode)CB_Mode.SelectedIndex;
+            tr.AI = SaveAIBits(tr.AI);
             if (tr is TrainerData7b b)
             {
                 b.Gift = CB_Gift.SelectedIndex;
@@ -405,11 +439,16 @@ namespace pkNX.WinForms
                 AIBits[i].Checked = ((val >> i) & 1) == 1;
         }
 
-        private uint SaveAIBits()
+        private uint SaveAIBits(uint oldval)
         {
-            uint val = 0;
+            uint val = oldval;
             for (int i = 0; i < AIBits.Length; i++)
-                val |= AIBits[i].Checked ? 1u << i : 0;
+            {
+                if (AIBits[i].Checked)
+                    val |= 1u << i;
+                else
+                    val &= ~(1u << i);
+            }
             return val;
         }
 
@@ -421,20 +460,17 @@ namespace pkNX.WinForms
 
         private void DumpTxt(object sender, EventArgs e)
         {
-            using (var sfd = new SaveFileDialog())
+            using var sfd = new SaveFileDialog {FileName = "Trainers.txt"};
+            if (sfd.ShowDialog() != DialogResult.OK)
+                return;
+            var sb = new StringBuilder();
+            for (int i = 0; i < Trainers.Length; i++)
             {
-                sfd.FileName = "Trainers.txt";
-                if (sfd.ShowDialog() != DialogResult.OK)
-                    return;
-                var sb = new StringBuilder();
-                for (int i = 0; i < Trainers.Length; i++)
-                {
-                    var tr = Trainers[i];
-                    tr.Name = trName[i];
-                    sb.Append(GetTrainerString(tr));
-                }
-                File.WriteAllText(sfd.FileName, sb.ToString());
+                var tr = Trainers[i];
+                tr.Name = trName[i];
+                sb.Append(GetTrainerString(tr));
             }
+            File.WriteAllText(sfd.FileName, sb.ToString());
         }
 
         private string GetTrainerString(VsTrainer Trainer)
@@ -444,19 +480,24 @@ namespace pkNX.WinForms
             var name = Trainer.Name;
             var team = Trainer.Team;
             var sb = new StringBuilder();
+            if (tr.Class > trClass.Length) // Klara and Avery out of bounds trclass edge case
+                tr.Class = 1;
+
             sb.AppendLine("======");
             sb.Append(file).Append(" - ").Append(trClass[tr.Class]).Append(" ").AppendLine(name);
             sb.AppendLine("======");
-            sb.Append("Pokemon: ").Append(tr.NumPokemon).AppendLine();
+            sb.Append("Pokémon: ").Append(tr.NumPokemon).AppendLine();
             for (int i = 0; i < tr.NumPokemon; i++)
             {
                 var pk = team[i];
                 if (pk.Shiny)
                     sb.Append("Shiny ");
                 sb.Append(specieslist[pk.Species]);
+                if (pk.Form > 0)
+                    sb.Append('-').Append(pk.Form);
                 sb.Append(" (Lv. ").Append(pk.Level).Append(") ");
                 if (pk.HeldItem > 0)
-                    sb.Append("@").Append(itemlist[pk.HeldItem]);
+                    sb.Append("@ ").Append(itemlist[pk.HeldItem]);
 
                 if (pk.Nature != 0)
                     sb.Append(" (Nature: ").Append(natures[pk.Nature]).Append(")");
@@ -499,7 +540,8 @@ namespace pkNX.WinForms
             pkm.Species = CB_Species.SelectedIndex;
             pkm.Level = (int)NUD_Level.Value;
             pkm.Form = CB_Forme.SelectedIndex;
-            var moves = learn.GetHighPoweredMoves(pkm.Species, pkm.Form, 4);
+            var movedata = Game.Data.MoveData.LoadAll();
+            var moves = learn.GetHighPoweredMoves(movedata, pkm.Species, pkm.Form, 4);
             SetMoves(moves);
         }
 
@@ -531,22 +573,61 @@ namespace pkNX.WinForms
         private void B_Randomize_Click(object sender, EventArgs e)
         {
             SaveEntry();
+            var trand = GetRandomizer();
+            trand.Execute();
+            LoadEntry();
+            System.Media.SystemSounds.Asterisk.Play();
+        }
+
+        private TrainerRandomizer GetRandomizer()
+        {
             var moves = Game.Data.MoveData.LoadAll();
             var rmove = new MoveRandomizer(Game.Info, moves, Personal);
-            int[] banned = Legal.GetBannedMoves(Game.Info.Game, moves);
+            int[] banned = Legal.GetBannedMoves(Game.Info.Game, moves.Length);
             rmove.Initialize((MovesetRandSettings)PG_Moves.SelectedObject, banned);
+            int[] ban = Array.Empty<int>();
+
+            if (Game.Info.SWSH)
+            {
+                var pt = Game.Data.PersonalData;
+                ban = pt.Table.Take(Game.Info.MaxSpeciesID + 1)
+                    .Select((z, i) => new {Species = i, Present = ((PersonalInfoSWSH)z).IsPresentInGame})
+                    .Where(z => !z.Present).Select(z => z.Species).ToArray();
+            }
+
             var rspec = new SpeciesRandomizer(Game.Info, Personal);
-            rspec.Initialize((SpeciesSettings)PG_Species.SelectedObject);
-            var trand = new TrainerRandomizer(Game.Info, Personal, Trainers.LoadAll())
+            var rform = new FormRandomizer(Personal);
+            rspec.Initialize((SpeciesSettings)PG_Species.SelectedObject, ban);
+            learn.Moves = moves;
+            var evos = Game.Data.EvolutionData;
+            var trand = new TrainerRandomizer(Game.Info, Personal, Trainers.LoadAll(), evos.LoadAll())
             {
                 ClassCount = CB_Trainer_Class.Items.Count,
                 Learn = learn,
                 RandMove = rmove,
                 RandSpec = rspec,
-                GetBlank = () => new TrainerPoke7b(), // this should probably be less specific
+                RandForm = rform,
+                GetBlank = () => (Game.Info.SWSH ? (TrainerPoke)new TrainerPoke8() : new TrainerPoke7b()), // this should probably be less specific
             };
-            trand.Initialize((TrainerRandSettings)PG_RTrainer.SelectedObject);
-            trand.Execute();
+            trand.Initialize((TrainerRandSettings)PG_RTrainer.SelectedObject, (SpeciesSettings)PG_Species.SelectedObject);
+            return trand;
+        }
+
+        private void B_Boost_Click(object sender, EventArgs e)
+        {
+            SaveEntry();
+            var trand = GetRandomizer();
+            var settings = (TrainerRandSettings)PG_RTrainer.SelectedObject;
+            trand.ModifyAllPokemon(pk => TrainerRandomizer.BoostLevel(pk, settings.LevelBoostRatio));
+            LoadEntry();
+            System.Media.SystemSounds.Asterisk.Play();
+        }
+
+        private void B_MaxAI_Click(object sender, EventArgs e)
+        {
+            SaveEntry();
+            var trand = GetRandomizer();
+            trand.ModifyAllTrainers(TrainerRandomizer.MaximizeAIFlags);
             LoadEntry();
             System.Media.SystemSounds.Asterisk.Play();
         }
@@ -554,7 +635,6 @@ namespace pkNX.WinForms
 
     public static class FormUtil
     {
-        // Utility (Shared)
         internal static void SetForms(int species, ComboBox cb, string[][] AltForms)
         {
             cb.Items.Clear();

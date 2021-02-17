@@ -14,16 +14,16 @@ namespace pkNX
     {
         public virtual int Count => Files.Length;
 
-        public Task<byte[][]> GetFiles() => new Task<byte[][]>(() => { CacheAll(); return Files; });
-        public Task<byte[]> GetFile(int file, int subFile = 0) => new Task<byte[]>(() => GetEntry(file, subFile));
-        public Task SetFile(int file, byte[] value, int subFile = 0) => new Task(() => SetEntry(file, value, subFile));
+        public Task<byte[][]> GetFiles() => new(() => { CacheAll(); return Files!; });
+        public Task<byte[]> GetFile(int file, int subFile = 0) => new(() => GetEntry(file, subFile));
+        public Task SetFile(int file, byte[] value, int subFile = 0) => new(() => SetEntry(file, value, subFile));
 
-        public string Extension => Path.GetExtension(FilePath);
-        public string FileName => Path.GetFileName(FilePath);
-        public string FilePath { get; set; }
+        public string? Extension => Path.GetExtension(FilePath);
+        public string? FileName => Path.GetFileName(FilePath);
+        public string? FilePath { get; set; }
         public bool Modified { get; set; }
 
-        protected byte[][] Files { get; set; }
+        protected byte[]?[] Files = Array.Empty<byte[]>();
 
         /// <summary>
         /// Packs the <see cref="LargeContainer"/> to the specified writing stream.
@@ -36,8 +36,8 @@ namespace pkNX
 
         #region File Reading
 
-        protected BinaryReader Reader { get; private set; }
-        private Stream Stream;
+        protected BinaryReader? Reader { get; private set; }
+        private Stream? Stream;
 
         protected void OpenBinary(string path)
         {
@@ -60,6 +60,8 @@ namespace pkNX
 
         public BinaryReader Seek(int file, long offset = 0, int subFile = 0)
         {
+            if (Reader == null)
+                throw new NullReferenceException("Reader is not initialized.");
             offset += GetFileOffset(file, subFile);
             Reader.BaseStream.Position = offset;
             return Reader;
@@ -67,7 +69,7 @@ namespace pkNX
 
         public abstract byte[] GetEntry(int index, int subFile);
 
-        public virtual void SetEntry(int index, byte[] value, int subFile)
+        public virtual void SetEntry(int index, byte[]? value, int subFile)
         {
             Files[index] = value;
             Modified |= value != null && !this[index].SequenceEqual(value);
@@ -75,7 +77,7 @@ namespace pkNX
 
         private byte[] GetCachedValue(int i, int subFile)
         {
-            return Files[i] ?? (Files[i] = GetEntry(i, subFile));
+            return Files[i] ??= GetEntry(i, subFile);
         }
 
         #endregion
@@ -89,15 +91,11 @@ namespace pkNX
         public void CacheAll()
         {
             for (int i = 0; i < Files.Length; i++)
-            {
-                if (Files[i] == null)
-                {
-                    Files[i] = GetCachedValue(i, 0);
-                }
-            }
+                Files[i] ??= GetCachedValue(i, 0);
 
             Reader = null;
-            Stream.Close();
+            Stream?.Close();
+            Stream = null;
         }
 
         public void CancelEdits()
@@ -113,7 +111,7 @@ namespace pkNX
 
         public abstract void Dump(string path, ContainerHandler handler);
 
-        public async Task SaveAs(string path, ContainerHandler handler, CancellationToken token = new CancellationToken())
+        public async Task SaveAs(string path, ContainerHandler handler, CancellationToken token = new())
         {
             bool sameLocation = path == FilePath && Reader != null;
             var writePath = sameLocation ? Path.GetTempFileName() : path;
@@ -143,8 +141,13 @@ namespace pkNX
 
         public void Dispose()
         {
-            Stream.Dispose();
-            Reader.Dispose();
+            Dispose(true);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            Stream?.Dispose();
+            Reader?.Dispose();
         }
     }
 }

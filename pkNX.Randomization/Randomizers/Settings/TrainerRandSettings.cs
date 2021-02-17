@@ -13,6 +13,9 @@ namespace pkNX.Randomization
         private const string Moves = nameof(Moves);
 
         #region General
+        [Category(General), Description("Modifies the team count per specifications, and forces fixed counts for some trainers.")]
+        public bool ModifyTeamCount { get; set; } = true;
+
         [Category(General), Description("Minimum count of PKM the Trainer has. New PKM will be added to the team if less are currently present.")]
         public int TeamCountMin { get; set; } = 1;
 
@@ -47,17 +50,26 @@ namespace pkNX.Randomization
         [Category(PKM), Description("Allows random Mega Forms when randomizing species.")]
         public bool AllowRandomMegaForms { get; set; } = false;
 
+        [Category(PKM), Description("Allows random Fused PKM when randomizing species.")]
+        public bool AllowRandomFusions { get; set; } = false;
+
+        [Category(PKM), Description("Allows random Held Items when randomizing species.")]
+        public bool AllowRandomHeldItems { get; set; } = false;
+
         [Category(PKM), Description("Forces all PKM above the specified level setting to be fully evolved.")]
         public bool ForceFullyEvolved { get; set; } = true;
 
         [Category(PKM), Description("Forces all PKM above this level to be fully evolved if the " + nameof(ForceFullyEvolved) + " setting is set.")]
         public int ForceFullyEvolvedAtLevel { get; set; } = 36;
 
+        [Category(PKM), Description("Swaps Gigantamaxed species with other Gigantamaxed species.")]
+        public bool GigantamaxSwap { get; set; } = false;
+
         [Category(PKM), Description("Causes all PKM levels to be boosted by the specified ratio multiplier.")]
         public bool BoostLevel { get; set; } = true;
 
-        [Category(PKM), Description("Boosts levels of all PKM by this ratio if the " + nameof(BoostLevel) + "setting is set.")]
-        public decimal LevelBoostRatio { get; set; } = 1.1m;
+        [Category(PKM), Description("Boosts levels of all PKM by this ratio if the " + nameof(BoostLevel) + " setting is set.")]
+        public float LevelBoostRatio { get; set; } = 1.1f;
         #endregion
 
         #region Stats
@@ -65,18 +77,21 @@ namespace pkNX.Randomization
         public bool RandomShinies { get; set; } = true;
 
         [Category(Stats), Description("Makes random Trainer PKM shiny at this rate (percent).")]
-        public decimal ShinyChance { get; set; } = 2.5m;
+        public float ShinyChance { get; set; } = 2.5f;
 
         [Category(Stats), Description("Maximizes all IVs.")]
         public bool MaxIVs { get; set; } = true;
 
         [Category(Stats), Description("Picks a random valid ability for each PKM.")]
         public bool RandomAbilities { get; set; } = true;
+
+        [Category(Stats), Description("Makes all Dynamaxed PKM have a Dynamax Level of 10.")]
+        public bool MaxDynamaxLevel { get; set; } = true;
         #endregion
 
         #region Moves
         [Category(Moves), Description("How movesets are randomized/chosen for each PKM.")]
-        public MoveRandType MoveRandType { get; set; } = MoveRandType.Random;
+        public MoveRandType MoveRandType { get; set; } = MoveRandType.RandomMoves;
         #endregion
     }
 }

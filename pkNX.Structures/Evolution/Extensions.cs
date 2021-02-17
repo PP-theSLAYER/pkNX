@@ -7,7 +7,7 @@ namespace pkNX.Structures
 {
     public static partial class Extensions
     {
-        private static readonly Dictionary<EvolutionType, EvolutionTypeArgumentType> ArgType = new Dictionary<EvolutionType, EvolutionTypeArgumentType>
+        private static readonly Dictionary<EvolutionType, EvolutionTypeArgumentType> ArgType = new()
         {
             [None] = NoArg,
             [LevelUpFriendship] = NoArg,
@@ -16,7 +16,7 @@ namespace pkNX.Structures
             [LevelUp] = Level,
             [Trade] = NoArg,
             [TradeHeldItem] = Items,
-            [TradeSpecies] = Species,
+            [TradeSpecies] = EvolutionTypeArgumentType.Species,
             [UseItem] = Items,
 
             [LevelUpATK] = Level,
@@ -33,16 +33,16 @@ namespace pkNX.Structures
             [LevelUpHeldItemDay] = Items,
             [LevelUpHeldItemNight] = Items,
             [LevelUpKnowMove] = Moves,
-            [LevelUpWithTeammate] = Species,
+            [LevelUpWithTeammate] = EvolutionTypeArgumentType.Species,
             [LevelUpMale] = Level,
             [LevelUpFemale] = Level,
             [LevelUpElectric] = NoArg,
             [LevelUpForest] = NoArg,
             [LevelUpCold] = NoArg,
             [LevelUpInverted] = NoArg,
-            [LevelUpAffection50MoveType] = NoArg,
+            [LevelUpAffection50MoveType] = Type,
 
-            [LevelUpMoveType] = Type,
+            [LevelUpDarkTeammate] = NoArg,
             [LevelUpWeather] = Level,
             [LevelUpMorning] = Level,
             [LevelUpNight] = Level,
@@ -54,7 +54,15 @@ namespace pkNX.Structures
             [LevelUpSummit] = Level,
             [LevelUpDusk] = Level,
             [LevelUpWormhole] = Level,
-            [UseItemWormhole] = Items
+            [UseItemWormhole] = Items,
+
+            [CriticalHitsInBattle] = Version,
+            [HitPointsLostInBattle] = Version,
+            [Spin] = NoArg,
+            [LevelUpNatureAmped] = NoArg,
+            [LevelUpNatureLowKey] = NoArg,
+            [TowerOfDarkness] = NoArg,
+            [TowerOfWaters] = NoArg,
         };
 
         public static EvolutionTypeArgumentType GetArgType(this EvolutionType t) => ArgType[t];

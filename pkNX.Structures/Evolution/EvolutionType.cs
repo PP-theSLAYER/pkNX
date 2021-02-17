@@ -32,7 +32,7 @@
         LevelUpCold,
         LevelUpInverted,
         LevelUpAffection50MoveType,
-        LevelUpMoveType,
+        LevelUpDarkTeammate,
         LevelUpWeather,
         LevelUpMorning,
         LevelUpNight,
@@ -45,6 +45,13 @@
         LevelUpDusk,
         LevelUpWormhole,
         UseItemWormhole,
+        CriticalHitsInBattle,
+        HitPointsLostInBattle,
+        Spin,
+        LevelUpNatureAmped,
+        LevelUpNatureLowKey,
+        TowerOfDarkness,
+        TowerOfWaters,
     }
 
     public enum EvolutionTypeArgumentType

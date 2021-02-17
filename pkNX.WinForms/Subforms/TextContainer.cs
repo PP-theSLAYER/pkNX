@@ -7,12 +7,12 @@ namespace pkNX.WinForms
     public class TextContainer
     {
         public readonly IFileContainer Container;
-        public readonly TextConfig Config;
+        public readonly TextConfig? Config;
         public bool Remap { get; set; }
 
-        private readonly string[][] Cache;
+        private readonly string[]?[] Cache;
 
-        public TextContainer(IFileContainer c, TextConfig t = null, bool remap = false)
+        public TextContainer(IFileContainer c, TextConfig? t = null, bool remap = false)
         {
             Remap = remap;
             Config = t;
@@ -24,7 +24,7 @@ namespace pkNX.WinForms
 
         public string[] this[int index]
         {
-            get => Cache[index] ?? (Cache[index] = GetLines(index));
+            get => Cache[index] ??= GetLines(index);
             set => Cache[index] = value;
         }
 

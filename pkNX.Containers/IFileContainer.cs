@@ -12,7 +12,7 @@ namespace pkNX.Containers
         /// <summary>
         /// Path the <see cref="IFileContainer"/> was loaded from.
         /// </summary>
-        string FilePath { get; set; }
+        string? FilePath { get; set; }
 
         /// <summary>
         /// Indication if the contents of the <see cref="IFileContainer"/> have been modified.
@@ -40,7 +40,7 @@ namespace pkNX.Containers
         void CancelEdits();
     }
 
-    public static partial class Extensions
+    public static class FileContainerExtensions
     {
         public static string GetFileFormatString(this IFileContainer c) => "D" + Math.Ceiling(Math.Log10(c.Count));
     }

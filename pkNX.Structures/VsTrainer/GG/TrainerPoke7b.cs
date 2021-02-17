@@ -11,7 +11,7 @@ namespace pkNX.Structures
         public TrainerPoke7b(byte[] data = null) => Data = data ?? new byte[SIZE];
 
         public static TrainerPoke7b[] ReadTeam(byte[] data, TrainerData _) => data.GetArray((x, offset) => new TrainerPoke7b(offset, x), SIZE);
-        public static byte[] WriteTeam(IList<TrainerPoke7b> team, TrainerData _) => team.SelectMany(z => z.Write()).ToArray();
+        public static byte[] WriteTeam(IList<TrainerPoke> team, TrainerData _) => team.SelectMany(z => z.Write()).ToArray();
 
         public TrainerPoke7b(int offset, byte[] data = null)
         {
@@ -51,6 +51,7 @@ namespace pkNX.Structures
 
         public override int Friendship { get => Data[0x0E]; set => Data[0x0E] = (byte)value; }
         public override int Rank { get => Data[0x0F]; set => Data[0x0F] = (byte)value; }
+        public override bool CanDynamax { get => false; set { } }
 
         public override uint IV32  { get => BitConverter.ToUInt32(Data, 0x10); set => BitConverter.GetBytes(value).CopyTo(Data, 0x10); }
         public override int IV_HP  { get => (int)(IV32 >> 00) & 0x1F; set => IV32 = (uint)((IV32 & ~(0x1F << 00)) | (uint)((value > 31 ? 31 : value) << 00)); }
@@ -59,7 +60,7 @@ namespace pkNX.Structures
         public override int IV_SPE { get => (int)(IV32 >> 15) & 0x1F; set => IV32 = (uint)((IV32 & ~(0x1F << 15)) | (uint)((value > 31 ? 31 : value) << 15)); }
         public override int IV_SPA { get => (int)(IV32 >> 20) & 0x1F; set => IV32 = (uint)((IV32 & ~(0x1F << 20)) | (uint)((value > 31 ? 31 : value) << 20)); }
         public override int IV_SPD { get => (int)(IV32 >> 25) & 0x1F; set => IV32 = (uint)((IV32 & ~(0x1F << 25)) | (uint)((value > 31 ? 31 : value) << 25)); }
-        public override bool Shiny { get => ((IV32 >> 30) & 1) == 1; set => IV32 = (uint)((IV32 & ~0x40000000) | (uint)(value ? 0x40000000 : 0)); }
+        public override bool Shiny { get => ((IV32 >> 30) & 1) == 1; set => IV32 = (IV32 & ~0x40000000u) | (value ? 0x40000000u : 0); }
 
         public override bool CanMegaEvolve
         {
@@ -79,7 +80,6 @@ namespace pkNX.Structures
         public override int Move2 { get => BitConverter.ToUInt16(Data, 0x22); set => BitConverter.GetBytes((ushort)value).CopyTo(Data, 0x22); }
         public override int Move3 { get => BitConverter.ToUInt16(Data, 0x24); set => BitConverter.GetBytes((ushort)value).CopyTo(Data, 0x24); }
         public override int Move4 { get => BitConverter.ToUInt16(Data, 0x26); set => BitConverter.GetBytes((ushort)value).CopyTo(Data, 0x26); }
-
 
         public override ushort[] GetStats(PersonalInfo p)
         {
@@ -132,12 +132,14 @@ namespace pkNX.Structures
 
         private static int AmplifyStat(int nature, int index, int initial)
         {
-            switch (AbilityAmpTable[(5 * nature) + index])
+            return AbilityAmpTable[(5 * nature) + index] switch
             {
-                case 1: return 110 * initial / 100; // 110%
-                case -1: return 90 * initial / 100; // 90%
-                default: return initial;            // 100%
-            }
+                1 => (110 * initial / 100) // 110%
+                ,
+                -1 => (90 * initial / 100) // 90%
+                ,
+                _ => initial
+            };
         }
 
         private static readonly sbyte[] AbilityAmpTable =

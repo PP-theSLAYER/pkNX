@@ -11,42 +11,50 @@ namespace pkNX.Randomization
         private readonly PersonalTable Personal;
         private readonly VsTrainer[] Trainers;
         private readonly int[] PossibleHeldItems;
+        private readonly int[] GigantamaxForms;
         private readonly Dictionary<int, int[]> MegaDictionary;
         private readonly Dictionary<int, int> IndexFixedCount;
         private readonly IList<int> SpecialClasses;
         private readonly IList<int> CrashClasses;
 
-        public GenericRandomizer Class { get; set; }
-        public LearnsetRandomizer Learn { get; set; }
-        public SpeciesRandomizer RandSpec { get; set; }
-        public MoveRandomizer RandMove { get; set; }
         public int ClassCount { get; set; }
-        public Func<TrainerPoke> GetBlank { get; set; }
-        public IList<int> FinalEvo { get; set; } = Array.Empty<int>();
+        public EvolutionSet[] Evos { get; }
 
-        private TrainerRandSettings Settings;
+        // Set these before starting up
+        public GenericRandomizer<int> Class { get; set; } = null!;
+        public LearnsetRandomizer Learn { get; set; } = null!;
+        public SpeciesRandomizer RandSpec { get; set; } = null!;
+        public FormRandomizer RandForm { get; set; } = null!;
+        public MoveRandomizer RandMove { get; set; } = null!;
+        public Func<TrainerPoke> GetBlank { get; set; } = null!;
 
-        public TrainerRandomizer(GameInfo info, PersonalTable t, VsTrainer[] trainers)
+        private TrainerRandSettings Settings = null!;
+        private SpeciesSettings SpecSettings = null!;
+
+        public TrainerRandomizer(GameInfo info, PersonalTable t, VsTrainer[] trainers, EvolutionSet[] evos)
         {
             Trainers = trainers;
             Info = info;
             Personal = t;
+            Evos = evos;
 
             PossibleHeldItems = Legal.GetRandomItemList(Info.Game);
+            GigantamaxForms = Legal.GigantamaxForms.ToArray();
             MegaDictionary = Legal.GetMegaDictionary(Info.Game);
             IndexFixedCount = GetFixedCountIndexes(Info.Game);
             SpecialClasses = GetSpecialClasses(Info.Game);
             CrashClasses = GetCrashClasses(Info.Game);
         }
 
-        public void Initialize(TrainerRandSettings settings)
+        public void Initialize(TrainerRandSettings settings, SpeciesSettings spec)
         {
             Settings = settings;
+            SpecSettings = spec;
 
             IEnumerable<int> classes = Enumerable.Range(0, ClassCount).Except(CrashClasses);
             if (Settings.SkipSpecialClasses)
                 classes = classes.Except(SpecialClasses);
-            Class = new GenericRandomizer(classes.ToArray());
+            Class = new GenericRandomizer<int>(classes.ToArray());
         }
 
         public override void Execute()
@@ -59,9 +67,10 @@ namespace pkNX.Randomization
                 // Trainer
                 if (Settings.RandomTrainerClass)
                     SetRandomClass(tr);
-                SetupTeamCount(tr);
+                if (Settings.ModifyTeamCount)
+                    SetupTeamCount(tr);
                 if (Settings.TrainerMaxAI)
-                    tr.Self.AI |= (int)(TrainerAI.Basic | TrainerAI.Strong | TrainerAI.Expert | TrainerAI.PokeChange);
+                    MaximizeAIFlags(tr);
 
                 // Team
                 foreach (var pk in tr.Team)
@@ -74,9 +83,16 @@ namespace pkNX.Randomization
             }
         }
 
+        public static void MaximizeAIFlags(VsTrainer tr)
+        {
+            const TrainerAI max = (TrainerAI.Basic | TrainerAI.Strong | TrainerAI.Expert | TrainerAI.PokeChange);
+            tr.Self.AI |= (int)max;
+        }
+
         private void SetupTeamCount(VsTrainer tr)
         {
             bool special = IndexFixedCount.TryGetValue(tr.ID, out var count);
+            special &= (count != 6 || Settings.ForceSpecialTeamCount6);
             int min = special ? count : Settings.TeamCountMin;
             int max = special ? count : Settings.TeamCountMax;
 
@@ -93,12 +109,7 @@ namespace pkNX.Randomization
                 tr.Self.Mode = BattleMode.Doubles;
             }
 
-            if (Settings.ForceSpecialTeamCount6 && special && count == 6)
-            {
-                for (int g = tr.Team.Count; g < 6; g++)
-                    tr.Team.Add(GetBlankPKM(avgLevel, avgSpec));
-            }
-            else if (tr.Team.Count < min)
+            if (tr.Team.Count < min)
             {
                 for (int p = tr.Team.Count; p < min; p++)
                     tr.Team.Add(GetBlankPKM(avgLevel, avgSpec));
@@ -126,59 +137,172 @@ namespace pkNX.Randomization
             if (Settings.RandomizeTeam)
             {
                 int Type = Settings.TeamTypeThemed ? Util.Random.Next(17) : -1;
-
-                // replaces Megas with another Mega (Dexio and Lysandre in USUM)
-                if (MegaDictionary.Any(z => z.Value.Contains(pk.HeldItem)))
-                {
-                    int[] mega = GetRandomMega(MegaDictionary, out int species);
-                    pk.Species = species;
-                    pk.HeldItem = mega[Util.Random.Next(mega.Length)];
-                    pk.Form = 0; // allow it to Mega Evolve naturally
-                }
-
-                // every other pkm
-                else
-                {
-                    pk.Species = RandSpec.GetRandomSpeciesType(pk.Species, Type);
-                    pk.HeldItem = PossibleHeldItems[Util.Random.Next(PossibleHeldItems.Length)];
-                    pk.Form = Legal.GetRandomForme(pk.Species, Settings.AllowRandomMegaForms, true, Personal);
-                }
+                RandomizeSpecFormItem(pk, Type);
 
                 pk.Gender = 0; // random
                 pk.Nature = Util.Random.Next(25); // random
             }
+        }
 
-            if (Settings.ForceFullyEvolved && pk.Level >= Settings.ForceFullyEvolvedAtLevel && !FinalEvo.Contains(pk.Species))
+        private void RandomizeSpecFormItem(IPokeData pk, int Type)
+        {
+            if (pk is TrainerPoke7b p7b)
             {
-                int randFinalEvo() => Util.Random.Next(FinalEvo.Count);
-                if (FinalEvo.Count != 0)
-                    pk.Species = FinalEvo[randFinalEvo()];
-                pk.Form = Legal.GetRandomForme(pk.Species, Settings.AllowRandomMegaForms, true, Personal);
+                RandomizeSpecForm(p7b, Type);
+                return;
             }
+
+            // replaces Megas with another Mega (Dexio and Lysandre in USUM)
+            if (MegaDictionary.Any(z => z.Value.Contains(pk.HeldItem)))
+            {
+                int[] mega = GetRandomMega(MegaDictionary, out int species);
+                pk.Species = species;
+                int index = Util.Random.Next(mega.Length);
+                pk.HeldItem = mega[index];
+                pk.Form = 0; // allow it to Mega Evolve naturally
+            }
+            else // every other pkm
+            {
+                pk.Species = RandSpec.GetRandomSpeciesType(pk.Species, Type);
+                pk.Form = RandForm.GetRandomForme(pk.Species, Settings.AllowRandomMegaForms, Settings.AllowRandomFusions, true, true, Personal.Table);
+            }
+        }
+
+        private void RandomizeSpecForm(TrainerPoke7b pk, int type)
+        {
+            bool isMega = pk.MegaFormChoice != 0;
+            if (isMega)
+            {
+                int[] mega = GetRandomMega(MegaDictionary, out int species);
+                pk.Species = species;
+                pk.CanMegaEvolve = true;
+                pk.MegaFormChoice = Util.Random.Next(mega.Length) + 1;
+                pk.Form = 0; // allow it to Mega Evolve naturally
+                return;
+            }
+
+            pk.Species = RandSpec.GetRandomSpeciesType(pk.Species, type);
+            pk.Form = RandForm.GetRandomForme(pk.Species, Settings.AllowRandomMegaForms, Settings.AllowRandomFusions, true, false, Personal.Table);
+        }
+
+        private void TryForceEvolve(IPokeData pk)
+        {
+            if (!Settings.ForceFullyEvolved || pk.Level < Settings.ForceFullyEvolvedAtLevel)
+                return;
+
+            var evos = Evos;
+            int species = pk.Species;
+            int form = pk.Form;
+
+            int timesEvolved = TryForceEvolve(evos, ref species, ref form);
+            if (timesEvolved == 0)
+                return;
+            pk.Species = species;
+            pk.Form = form;
+        }
+
+        private int TryForceEvolve(IReadOnlyList<EvolutionSet> evos, ref int species, ref int form)
+        {
+            int timesEvolved = 0;
+            do
+            {
+                var index = Personal.GetFormeIndex(species, form);
+                var eSet = evos[index].PossibleEvolutions;
+                int evoCount = eSet.Count(z => z.HasData);
+                if (evoCount == 0 && species != (int)Species.Meltan)
+                    break;
+                ++timesEvolved;
+                var next = Util.Random.Next(evoCount);
+                var nextEvo = eSet[next];
+
+                // Meltan only evolves in GO, so force evolve if no custom evo method has been added
+                if (evoCount == 0 && species == (int)Species.Meltan)
+                    species = (int)Species.Melmetal;
+                else
+                    species = nextEvo.Species;
+
+                form = nextEvo.Form >= 0 ? nextEvo.Form : form;
+            }
+            while (timesEvolved < 3); // prevent randomized evos from looping excessively
+            return timesEvolved;
         }
 
         private void UpdatePKMFromSettings(TrainerPoke pk)
         {
+            if (Settings.AllowRandomHeldItems)
+                pk.HeldItem = PossibleHeldItems[Util.Random.Next(PossibleHeldItems.Length)];
             if (Settings.BoostLevel)
-                pk.Level = Legal.GetModifiedLevel(pk.Level, Settings.LevelBoostRatio);
+                BoostLevel(pk, Settings.LevelBoostRatio);
             if (Settings.RandomShinies)
                 pk.Shiny = Util.Random.Next(0, 100 + 1) < Settings.ShinyChance;
             if (Settings.RandomAbilities)
-                pk.Ability = (int)Util.Rand32() % 4;
+                pk.Ability = Util.Random.Next(1, 4); // 1, 2, or H
             if (Settings.MaxIVs)
                 pk.IVs = new[] { 31, 31, 31, 31, 31, 31 };
 
+            TryForceEvolve(pk);
+
+            // Gen 8 settings
+            if (pk is TrainerPoke8 c)
+            {
+                if (Settings.GigantamaxSwap && c.CanGigantamax)
+                {
+                    // only allow Gigantamax Forms per the user's species settings
+                    var species = SpecSettings.GetSpecies(Info.MaxSpeciesID, Info.Generation);
+                    var AllowedGigantamaxes = species.Intersect(GigantamaxForms).ToArray();
+
+                    if (AllowedGigantamaxes.Length == 0) // return if the user's settings make it to where no gmax fits the criteria
+                        return;
+
+                    c.Species = AllowedGigantamaxes[Util.Random.Next(AllowedGigantamaxes.Length)];
+                    c.Form = c.Species == (int)Species.Pikachu || c.Species == (int)Species.Meowth ? 0 : RandForm.GetRandomForme(c.Species, false, false, false, false, Personal.Table); // Pikachu & Meowth altforms can't gmax
+                }
+                if (Settings.MaxDynamaxLevel && c.CanDynamax)
+                    c.DynamaxLevel = 10;
+            }
+
             RandomizeEntryMoves(pk);
+        }
+
+        public static void BoostLevel(IPokeData pk, double ratio)
+        {
+            pk.Level = Legal.GetModifiedLevel(pk.Level, ratio);
+        }
+
+        public void ModifyAllPokemon(Action<IPokeData> act)
+        {
+            if (act == null)
+                throw new ArgumentException(nameof(act));
+
+            foreach (var tr in Trainers.Where(z => z.Team.Count != 0))
+            {
+                foreach (var pk in tr.Team)
+                {
+                    if (pk.Species != 0)
+                        act(pk);
+                }
+            }
+        }
+
+        public void ModifyAllTrainers(Action<VsTrainer> act)
+        {
+            if (act == null)
+                throw new ArgumentException(nameof(act));
+
+            foreach (var tr in Trainers.Where(z => z.Team.Count != 0))
+            {
+                act(tr);
+            }
         }
 
         private void RandomizeEntryMoves(TrainerPoke pk)
         {
             switch (Settings.MoveRandType)
             {
-                case MoveRandType.Random: // Random
+                case MoveRandType.RandomMoves: // Random
                     pk.Moves = RandMove.GetRandomMoveset(pk.Species);
                     break;
-                case MoveRandType.CurrentMoves:
+                case MoveRandType.LevelUpMoves:
                     pk.Moves = Learn.GetCurrentMoves(pk.Species, pk.Form, pk.Level);
                     break;
                 case MoveRandType.HighPowered:
@@ -212,7 +336,22 @@ namespace pkNX.Randomization
             return megas.Values.ElementAt(rnd);
         }
 
+        // 1 poke max
         private static readonly int[] royal = { 081, 082, 083, 084, 185 };
+
+        // 3 poke max
+        private static readonly int[] MultiBattle_GG =
+        {
+            007, 008, 020, 021, 024, 025, 032, 033, 050, 051, // Jessie & James
+            028, 029, 030, 031, // Rival vs Archer & Grunt
+        };
+
+        // 3 poke max
+        private static readonly int[] MultiBattle_SWSH =
+        {
+            156, 157, 158, 197, 198, 199, 225, 226, 227, 312, 313, 314, // Hop
+            223, 224, // Sordward and Shielbert
+        };
 
         private static Dictionary<int, int> GetFixedCountIndexes(GameVersion game)
         {
@@ -221,24 +360,29 @@ namespace pkNX.Randomization
             if (GameVersion.ORAS.Contains(game))
                 return Legal.ImportantTrainers_ORAS.ToDictionary(z => z, _ => 6);
             if (GameVersion.SM.Contains(game))
-                return Legal.ImportantTrainers_SM.Concat(royal).ToDictionary(z => z, index => royal.Contains(index) ? 1 : 6);
+                return Legal.ImportantTrainers_SM.ToDictionary(z => z, index => royal.Contains(index) ? 1 : 6);
             if (GameVersion.USUM.Contains(game))
-                return Legal.ImportantTrainers_USUM.Concat(royal).ToDictionary(z => z, index => royal.Contains(index) ? 1 : 6);
+                return Legal.ImportantTrainers_USUM.ToDictionary(z => z, index => royal.Contains(index) ? 1 : 6);
             if (GameVersion.GG.Contains(game))
-                return Legal.ImportantTrainers_GG.ToDictionary(z => z, _ => 6);
+                return Legal.ImportantTrainers_GG.ToDictionary(z => z, index => MultiBattle_GG.Contains(index) ? 3 : 6);
+            if (GameVersion.SWSH.Contains(game))
+                return Legal.ImportantTrainers_SWSH.ToDictionary(z => z, index => MultiBattle_SWSH.Contains(index) ? 3 : 6);
             return new Dictionary<int, int>();
         }
 
-        private static readonly int[] MasterTrainerGG = Enumerable.Range(72, 381 - 72 + 1).ToArray();
+        private static readonly int[] CrashClasses_GG = Legal.BlacklistedClasses_GG;
+        private static readonly int[] CrashClasses_SWSH = Legal.BlacklistedClasses_SWSH;
 
         private static int[] GetSpecialClasses(GameVersion game)
         {
+            if (GameVersion.SWSH.Contains(game))
+                return Legal.SpecialClasses_SWSH;
             if (GameVersion.GG.Contains(game))
                 return Legal.SpecialClasses_GG;
-            if (GameVersion.SM.Contains(game))
-                return Legal.SpecialClasses_SM;
             if (GameVersion.USUM.Contains(game))
                 return Legal.SpecialClasses_USUM;
+            if (GameVersion.SM.Contains(game))
+                return Legal.SpecialClasses_SM;
             if (GameVersion.ORAS.Contains(game))
                 return Legal.SpecialClasses_ORAS;
             if (GameVersion.XY.Contains(game))
@@ -248,8 +392,10 @@ namespace pkNX.Randomization
 
         private static int[] GetCrashClasses(GameVersion game)
         {
+            if (GameVersion.SWSH.Contains(game))
+                return CrashClasses_SWSH;
             if (GameVersion.GG.Contains(game))
-                return MasterTrainerGG;
+                return CrashClasses_GG;
             return Array.Empty<int>();
         }
     }

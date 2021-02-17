@@ -12,7 +12,7 @@ namespace pkNX.Structures
         private const int ENTRY_SIZE = 6;
         private const int ENTRY_COUNT = 8;
         public const int SIZE = ENTRY_COUNT * ENTRY_SIZE;
-        private static readonly HashSet<int> argEvos = new HashSet<int> { 6, 8, 16, 17, 18, 19, 20, 21, 22, 29, 30, 32, 33, 34 };
+        private static readonly HashSet<int> argEvos = new() { 6, 8, 16, 17, 18, 19, 20, 21, 22, 29, 30, 32, 33, 34 };
 
         public EvolutionSet6(byte[] data)
         {
@@ -40,17 +40,15 @@ namespace pkNX.Structures
 
         public override byte[] Write()
         {
-            using (MemoryStream ms = new MemoryStream())
-            using (BinaryWriter bw = new BinaryWriter(ms))
+            using MemoryStream ms = new MemoryStream();
+            using BinaryWriter bw = new BinaryWriter(ms);
+            foreach (EvolutionMethod evo in PossibleEvolutions)
             {
-                foreach (EvolutionMethod evo in PossibleEvolutions)
-                {
-                    bw.Write((ushort)evo.Method);
-                    bw.Write((ushort)evo.Argument);
-                    bw.Write((ushort)evo.Species);
-                }
-                return ms.ToArray();
+                bw.Write((ushort)evo.Method);
+                bw.Write((ushort)evo.Argument);
+                bw.Write((ushort)evo.Species);
             }
+            return ms.ToArray();
         }
     }
 }

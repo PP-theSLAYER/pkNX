@@ -6,7 +6,7 @@ namespace pkNX.Randomization
 {
     public static class Util
     {
-        public static Random Random { get; private set; } = new Random();
+        public static Random Random { get; private set; } = new();
 
         public static void ReseedRand(int seed)
         {
@@ -28,15 +28,19 @@ namespace pkNX.Randomization
             }
         }
 
-        public static int ToInt32(string value)
+        public static int ToInt32(string? value)
         {
-            string val = value?.Replace(" ", "").Replace("_", "").Trim();
+            if (value is null)
+                return 0;
+            string val = value.Replace(" ", "").Replace("_", "").Trim();
             return string.IsNullOrWhiteSpace(val) ? 0 : int.Parse(val);
         }
 
-        public static uint ToUInt32(string value)
+        public static uint ToUInt32(string? value)
         {
-            string val = value?.Replace(" ", "").Replace("_", "").Trim();
+            if (value is null)
+                return 0;
+            string val = value.Replace(" ", "").Replace("_", "").Trim();
             return string.IsNullOrWhiteSpace(val) ? 0 : uint.Parse(val);
         }
 

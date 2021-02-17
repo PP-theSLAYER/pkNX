@@ -14,8 +14,8 @@ namespace pkNX.Game
 
         public Func<byte[], TrainerData> ReadTrainer;
         public Func<byte[], TrainerPoke> ReadPoke;
-        public Func<byte[], TrainerData, TrainerPoke7b[]> ReadTeam;
-        public Func<TrainerPoke7b[], TrainerData, byte[]> WriteTeam;
+        public Func<byte[], TrainerData, TrainerPoke[]> ReadTeam;
+        public Func<TrainerPoke[], TrainerData, byte[]> WriteTeam;
         public Func<byte[], TrainerClass> ReadClass;
 
         private VsTrainer[] Cache;
@@ -31,11 +31,11 @@ namespace pkNX.Game
 
         public VsTrainer this[int index]
         {
-            get => Cache[index] ?? (Cache[index] = LoadTrainer(index));
+            get => Cache[index] ??= LoadTrainer(index);
             set => Cache[index] = value;
         }
 
-        public TrainerClass GetClass(int index) => CacheClass[index] ?? (CacheClass[index] = ReadClass(TrainerClass[index]));
+        public TrainerClass GetClass(int index) => CacheClass[index] ??= ReadClass(TrainerClass[index]);
 
         private VsTrainer LoadTrainer(int index)
         {
@@ -66,8 +66,11 @@ namespace pkNX.Game
         public VsTrainer[] LoadAll()
         {
             for (int i = 0; i < Length; i++)
+            {
                 // ReSharper disable once AssignmentIsFullyDiscarded
                 _ = this[i]; // force load cache
+            }
+
             return Cache;
         }
 

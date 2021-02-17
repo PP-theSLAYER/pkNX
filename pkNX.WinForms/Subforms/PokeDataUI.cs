@@ -14,6 +14,8 @@ namespace pkNX.WinForms
 {
     public partial class PokeDataUI : Form
     {
+        private readonly bool Loaded;
+
         public PokeDataUI(PokeEditor editor, GameManager rom)
         {
             ROM = rom;
@@ -30,33 +32,38 @@ namespace pkNX.WinForms
             species = ROM.GetStrings(TextName.SpeciesNames);
             abilities = ROM.GetStrings(TextName.AbilityNames);
             types = ROM.GetStrings(TextName.Types);
-
-            string[] ps = { "P", "S" }; // Distinguish Physical/Special Z Moves
-            for (int i = 622; i < 658; i++)
-                movelist[i] += $" ({ps[i % 2]})";
+            movelist = EditorUtil.SanitizeMoveList(movelist);
 
             species[0] = "---";
             abilities[0] = items[0] = movelist[0] = "";
 
             var pt = ROM.Data.PersonalData;
+            cPersonal = pt[0];
+            cLearnset = Editor.Learn[0];
+            cEvos = Editor.Evolve[0];
+            cMega = Editor.Mega != null ? Editor.Mega[0] : Array.Empty<MegaEvolutionSet>();
 
             var altForms = pt.GetFormList(species, pt.MaxSpeciesID);
             entryNames = pt.GetPersonalEntryList(altForms, species, pt.MaxSpeciesID, out baseForms, out formVal);
 
             InitPersonal();
             InitLearn();
-            InitEvo(8);
-            InitMega(2);
+
+            InitEvo(Editor.Evolve[0].PossibleEvolutions.Length);
+
+            Megas = Editor.Mega != null ? InitMega(2) : Array.Empty<MegaEvoEntry>();
 
             CB_Species.SelectedIndex = 1;
+            Loaded = true;
 
             PG_Personal.SelectedObject = EditUtil.Settings.Personal;
             PG_Evolution.SelectedObject = EditUtil.Settings.Species;
             PG_Learn.SelectedObject = EditUtil.Settings.Learn;
+            PG_Move.SelectedObject = EditUtil.Settings.Move;
         }
 
-        public GameManager ROM { get; set; }
-        public PokeEditor Editor { get; set; }
+        public readonly GameManager ROM;
+        public readonly PokeEditor Editor;
         public bool Modified { get; set; }
 
         private readonly ComboBox[] helditem_boxes;
@@ -77,19 +84,30 @@ namespace pkNX.WinForms
         public Learnset cLearnset;
         public EvolutionSet cEvos;
         public MegaEvolutionSet[] cMega;
+        private readonly MegaEvoEntry[] Megas;
 
         public void InitPersonal()
         {
-            var TMs = GetTMList();
-            if (TMs.Length == 0) // No ExeFS to grab TMs from.
+            var TMs = Editor.TMHM;
+            if (TMs.Count == 0) // No ExeFS to grab TMs from.
             {
                 for (int i = 0; i < 100; i++)
                     CLB_TM.Items.Add($"TM{i+1:00}");
             }
             else // Use TM moves.
             {
-                for (int i = 0; i < TMs.Length; i++)
-                    CLB_TM.Items.Add($"TM{i+1:00} {movelist[TMs[i]]}");
+                if (GameVersion.SWSH.Contains(ROM.Game))
+                {
+                    for (int i = 0; i < TMs.Count / 2; i++)
+                        CLB_TM.Items.Add($"TM{i:00} {movelist[TMs[i]]}");
+                    for (int i = TMs.Count / 2; i < TMs.Count; i++)
+                        CLB_TM.Items.Add($"TR{i-100:00} {movelist[TMs[i]]}");
+                }
+                else
+                {
+                    for (int i = 0; i < TMs.Count; i++)
+                        CLB_TM.Items.Add($"TM{i + 1:00} {movelist[TMs[i]]}");
+                }
             }
 
             var entries = entryNames.Select((z, i) => $"{z} - {i:000}");
@@ -127,7 +145,7 @@ namespace pkNX.WinForms
                 dgvLevel.Width = 45;
                 dgvLevel.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             }
-            DataGridViewComboBoxColumn dgvMove = new DataGridViewComboBoxColumn();
+            DataGridViewComboBoxColumn dgvMove = new();
             {
                 dgvMove.HeaderText = "Move";
                 dgvMove.DisplayIndex = 1;
@@ -141,7 +159,7 @@ namespace pkNX.WinForms
             dgv.Columns.Add(dgvMove);
         }
 
-        private static EvolutionRow[] EvoRows;
+        private static EvolutionRow[] EvoRows = Array.Empty<EvolutionRow>();
 
         public void InitEvo(int rows)
         {
@@ -160,40 +178,24 @@ namespace pkNX.WinForms
             }
         }
 
-        private MegaEvoEntry[] Megas;
-
-        public void InitMega(int count)
+        public MegaEvoEntry[] InitMega(int count)
         {
-            Megas = new MegaEvoEntry[count];
+            var result = new MegaEvoEntry[count];
             MegaEvoEntry.items = items;
 
             for (int i = 0; i < count; i++)
             {
                 var row = new MegaEvoEntry();
                 flowLayoutPanel1.Controls.Add(row);
-                Megas[i] = row;
+                result[i] = row;
             }
-        }
 
-        private static int[] GetTMList()
-        {
-            return new[]
-            {
-                029, 269, 270, 100, 156, 113, 182, 164, 115, 091,
-                261, 263, 280, 019, 069, 086, 525, 369, 231, 399,
-                492, 157, 009, 404, 127, 398, 092, 161, 503, 339,
-                007, 605, 347, 406, 008, 085, 053, 087, 200, 094,
-                089, 120, 247, 583, 076, 126, 057, 063, 276, 355,
-                059, 188, 072, 430, 058, 446, 006, 529, 138, 224,
-                // rest are same as SM, unused
-
-                // No HMs
-            };
+            return result;
         }
 
         public void UpdateIndex(object sender, EventArgs e)
         {
-            if (cPersonal != null)
+            if (Loaded)
                 SaveCurrent();
             LoadIndex(CB_Species.SelectedIndex);
         }
@@ -207,10 +209,22 @@ namespace pkNX.WinForms
             LoadPersonal(Editor.Personal[index]);
             LoadLearnset(Editor.Learn[index]);
             LoadEvolutions(Editor.Evolve[index]);
-            LoadMegas(Editor.Mega[index], spec);
-            var img = SpriteBuilder.GetSprite(spec, form, 0, 0, false, false);
-            img = ImageUtil.ScaleImage((Bitmap)img, 2);
-            PB_MonSprite.Image = img;
+            if (Editor.Mega != null)
+                LoadMegas(Editor.Mega[index], spec);
+            Bitmap rawImg = (Bitmap)SpriteUtil.GetSprite(spec, form, 0, 0, false, false, false);
+            Bitmap bigImg = new(rawImg.Width * 2, rawImg.Height * 2);
+            for (int x = 0; x < rawImg.Width; x++)
+            {
+                for (int y = 0; y < rawImg.Height; y++)
+                {
+                    Color c = rawImg.GetPixel(x, y);
+                    bigImg.SetPixel(2 * x, 2 * y, c);
+                    bigImg.SetPixel((2 * x) + 1, 2 * y, c);
+                    bigImg.SetPixel(2 * x, (2 * y) + 1, c);
+                    bigImg.SetPixel((2 * x) + 1, (2 * y) + 1, c);
+                }
+            }
+            PB_MonSprite.Image = bigImg;
         }
 
         private void SaveCurrent()
@@ -279,10 +293,26 @@ namespace pkNX.WinForms
                 CB_ZBaseMove.SelectedIndex = sm.SpecialZ_BaseMove;
                 CB_ZMove.SelectedIndex = sm.SpecialZ_ZMove;
                 CHK_Variant.Checked = sm.LocalVariant;
+                CHK_IsPresentInGame.Visible = CHK_CanNotDynamax.Visible =
+                L_RegionalDex.Visible = L_ArmorDex.Visible = L_CrownDex.Visible = TB_RegionalDex.Visible = TB_ArmorDex.Visible = TB_CrownDex.Visible = false;
             }
             if (pkm is PersonalInfoGG gg)
             {
                 MT_GoID.Text = gg.GoSpecies.ToString("000");
+                CHK_Variant.Checked = gg.LocalVariant;
+                GB_ZMove.Visible = CHK_IsPresentInGame.Visible = CHK_CanNotDynamax.Visible =
+                L_RegionalDex.Visible = L_ArmorDex.Visible = L_CrownDex.Visible = TB_RegionalDex.Visible = TB_ArmorDex.Visible = TB_CrownDex.Visible = false;
+            }
+            if (pkm is PersonalInfoSWSH swsh)
+            {
+                MT_GoID.Text = swsh.SpriteIndex.ToString("000");
+                TB_RegionalDex.Text = swsh.PokeDexIndex.ToString("000");
+                TB_ArmorDex.Text = swsh.ArmorDexIndex.ToString("000");
+                TB_CrownDex.Text = swsh.CrownDexIndex.ToString("000");
+                CHK_IsPresentInGame.Checked = swsh.IsPresentInGame;
+                CHK_Variant.Checked = swsh.IsRegionalForm;
+                CHK_CanNotDynamax.Checked = swsh.CanNotDynamax;
+                L_CallRate.Visible = TB_CallRate.Visible = GB_ZMove.Visible = false;
             }
 
             for (int i = 0; i < CLB_TM.Items.Count; i++)
@@ -342,6 +372,15 @@ namespace pkNX.WinForms
             {
                 gg.GoSpecies = Convert.ToUInt16(MT_GoID.Text);
             }
+            if (pkm is PersonalInfoSWSH swsh)
+            {
+                swsh.PokeDexIndex = Convert.ToUInt16(TB_RegionalDex.Text);
+                swsh.ArmorDexIndex = Convert.ToUInt16(TB_ArmorDex.Text);
+                swsh.CrownDexIndex = Convert.ToUInt16(TB_CrownDex.Text);
+                swsh.IsPresentInGame = CHK_IsPresentInGame.Checked;
+                swsh.IsRegionalForm = CHK_Variant.Checked;
+                swsh.CanNotDynamax = CHK_CanNotDynamax.Checked;
+            }
 
             for (int i = 0; i < CLB_TM.Items.Count; i++)
                 pkm.TMHM[i] = CLB_TM.GetItemChecked(i);
@@ -371,8 +410,8 @@ namespace pkNX.WinForms
         public void SaveLearnset()
         {
             var pkm = cLearnset;
-            List<int> moves = new List<int>();
-            List<int> levels = new List<int>();
+            List<int> moves = new();
+            List<int> levels = new();
             for (int i = 0; i < dgv.Rows.Count - 1; i++)
             {
                 int move = Array.IndexOf(movelist, dgv.Rows[i].Cells[1].Value);
@@ -408,6 +447,8 @@ namespace pkNX.WinForms
 
         public void LoadMegas(MegaEvolutionSet[] m, int spec)
         {
+            if (Editor.Mega == null)
+                return;
             cMega = m;
             Debug.Assert(Megas.Length == m.Length);
             for (int i = 0; i < Megas.Length; i++)
@@ -419,6 +460,8 @@ namespace pkNX.WinForms
 
         public void SaveMegas()
         {
+            if (Editor.Mega == null)
+                return;
             var m = cMega;
             Debug.Assert(Megas.Length == m.Length);
             foreach (var row in Megas)
@@ -445,6 +488,7 @@ namespace pkNX.WinForms
 
         private void B_AmpExperience_Click(object sender, EventArgs e)
         {
+            SaveCurrent();
             decimal rate = NUD_AmpEXP.Value;
             foreach (var p in Editor.Personal.Table)
                 p.BaseEXP = (int)Math.Max(0, Math.Min(byte.MaxValue, p.BaseEXP * rate));
@@ -456,9 +500,20 @@ namespace pkNX.WinForms
         {
             SaveCurrent();
             var settings = (SpeciesSettings)PG_Evolution.SelectedObject;
-            settings.Gen2 = settings.Gen3 = settings.Gen4 = settings.Gen5 = settings.Gen6 = settings.Gen7 = false;
+            if (ROM.Info.GG)
+                settings.Gen2 = settings.Gen3 = settings.Gen4 = settings.Gen5 = settings.Gen6 = settings.Gen7 = settings.Gen8 = false;
             var rand = new EvolutionRandomizer(ROM.Info, Editor.Evolve.LoadAll(), Editor.Personal);
-            rand.Randomizer.Initialize(settings);
+            int[] ban = Array.Empty<int>();
+
+            if (ROM.Info.SWSH)
+            {
+                var pt = ROM.Data.PersonalData;
+                ban = pt.Table.Take(ROM.Info.MaxSpeciesID + 1)
+                    .Select((z, i) => new {Species = i, Present = ((PersonalInfoSWSH)z).IsPresentInGame})
+                    .Where(z => !z.Present).Select(z => z.Species).ToArray();
+            }
+
+            rand.RandSpec.Initialize(settings, ban);
             rand.Execute();
             LoadIndex(CB_Species.SelectedIndex);
             System.Media.SystemSounds.Asterisk.Play();
@@ -468,10 +523,35 @@ namespace pkNX.WinForms
         {
             SaveCurrent();
             var settings = (SpeciesSettings)PG_Evolution.SelectedObject;
-            settings.Gen2 = settings.Gen3 = settings.Gen4 = settings.Gen5 = settings.Gen6 = settings.Gen7 = false;
+            if (ROM.Info.GG)
+                settings.Gen2 = settings.Gen3 = settings.Gen4 = settings.Gen5 = settings.Gen6 = settings.Gen7 = settings.Gen8 = false;
             var rand = new EvolutionRandomizer(ROM.Info, Editor.Evolve.LoadAll(), Editor.Personal);
-            rand.Randomizer.Initialize(settings);
+            rand.RandSpec.Initialize(settings);
             rand.ExecuteTrade();
+            LoadIndex(CB_Species.SelectedIndex);
+            System.Media.SystemSounds.Asterisk.Play();
+        }
+
+        private void B_EvolveEveryLevel_Click(object sender, EventArgs e)
+        {
+            SaveCurrent();
+            var settings = (SpeciesSettings)PG_Evolution.SelectedObject;
+            if (ROM.Info.GG)
+                settings.Gen2 = settings.Gen3 = settings.Gen4 = settings.Gen5 = settings.Gen6 = settings.Gen7 = settings.Gen8 = false;
+            var rand = new EvolutionRandomizer(ROM.Info, Editor.Evolve.LoadAll(), Editor.Personal);
+            int[] ban = Array.Empty<int>();
+
+            if (ROM.Info.SWSH)
+            {
+                var pt = ROM.Data.PersonalData;
+                ban = pt.Table.Take(ROM.Info.MaxSpeciesID + 1)
+                    .Select((z, i) => new {Species = i, Present = ((PersonalInfoSWSH)z).IsPresentInGame})
+                    .Where(z => !z.Present).Select(z => z.Species).ToArray();
+            }
+
+            rand.RandSpec.Initialize(settings, ban);
+            rand.ExecuteEvolveEveryLevel();
+            rand.Execute(); // randomize right after
             LoadIndex(CB_Species.SelectedIndex);
             System.Media.SystemSounds.Asterisk.Play();
         }
@@ -480,10 +560,11 @@ namespace pkNX.WinForms
         {
             SaveCurrent();
             var settings = (LearnSettings)PG_Learn.SelectedObject;
+            var moveset = (MovesetRandSettings)PG_Move.SelectedObject;
             var rand = new LearnsetRandomizer(ROM.Info, Editor.Learn.LoadAll(), Editor.Personal);
             var moves = ROM.Data.MoveData.LoadAll();
-            int[] banned = Legal.GetBannedMoves(ROM.Info.Game, moves);
-            rand.Initialize(moves, settings, EditUtil.Settings.Move, banned);
+            int[] banned = Legal.GetBannedMoves(ROM.Info.Game, moves.Length);
+            rand.Initialize(moves, settings, moveset, banned);
             rand.Execute();
             LoadIndex(CB_Species.SelectedIndex);
             System.Media.SystemSounds.Asterisk.Play();
@@ -498,8 +579,9 @@ namespace pkNX.WinForms
                     "Not expanding learnsets.");
                 return;
             }
+            var moveset = (MovesetRandSettings)PG_Move.SelectedObject;
             var rand = new LearnsetRandomizer(ROM.Info, Editor.Learn.LoadAll(), Editor.Personal);
-            rand.Initialize(ROM.Data.MoveData.LoadAll(), settings, EditUtil.Settings.Move);
+            rand.Initialize(ROM.Data.MoveData.LoadAll(), settings, moveset);
             rand.ExecuteExpandOnly();
             LoadIndex(CB_Species.SelectedIndex);
             System.Media.SystemSounds.Asterisk.Play();
@@ -508,8 +590,9 @@ namespace pkNX.WinForms
         private void B_LearnMetronome_Click(object sender, EventArgs e)
         {
             var settings = (LearnSettings)PG_Learn.SelectedObject;
+            var moveset = (MovesetRandSettings)PG_Move.SelectedObject;
             var rand = new LearnsetRandomizer(ROM.Info, Editor.Learn.LoadAll(), Editor.Personal);
-            rand.Initialize(ROM.Data.MoveData.LoadAll(), settings, EditUtil.Settings.Move);
+            rand.Initialize(ROM.Data.MoveData.LoadAll(), settings, moveset);
             rand.ExecuteMetronome();
             LoadIndex(CB_Species.SelectedIndex);
             System.Media.SystemSounds.Asterisk.Play();

@@ -7,7 +7,7 @@ namespace pkNX.WinForms
 {
     public partial class MegaEvoEntry : UserControl
     {
-        public static string[] items;
+        public static string[] items = Array.Empty<string>();
 
         private static readonly string[] EvoMethods = Enum.GetNames(typeof(MegaEvolutionMethod));
 
@@ -27,12 +27,12 @@ namespace pkNX.WinForms
         }
 
         public int Species { private get; set; }
-        private MegaEvolutionSet current;
+        private MegaEvolutionSet? current;
 
         private void ChangeSpecies(int form)
         {
-            PB_Base.Image = SpriteBuilder.GetSprite(Species, 0, 0, 0, false, false, 7);
-            PB_Preview.Image = SpriteBuilder.GetSprite(Species, form, 0, 0, false, false, 7);
+            PB_Base.Image = SpriteUtil.GetSprite(Species, 0, 0, 0, false, false, false, 7);
+            PB_Preview.Image = SpriteUtil.GetSprite(Species, form, 0, 0, false, false, false, 7);
             PB_Preview.Visible = PB_Base.Visible = L_Into.Visible = CB_Method.SelectedIndex > 0;
         }
 
@@ -47,6 +47,9 @@ namespace pkNX.WinForms
 
         public void SaveEvolution()
         {
+            if (current == null)
+                return;
+
             if (CB_Method.SelectedIndex <= 0)
             {
                 current.ToForm = 0;

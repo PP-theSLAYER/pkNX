@@ -40,11 +40,12 @@
             this.Grid.Dock = System.Windows.Forms.DockStyle.Fill;
             this.Grid.Location = new System.Drawing.Point(0, 0);
             this.Grid.Name = "Grid";
-            this.Grid.Size = new System.Drawing.Size(461, 494);
+            this.Grid.Size = new System.Drawing.Size(461, 681);
             this.Grid.TabIndex = 0;
             // 
             // B_Save
             // 
+            this.B_Save.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.B_Save.Location = new System.Drawing.Point(401, 0);
             this.B_Save.Name = "B_Save";
             this.B_Save.Size = new System.Drawing.Size(60, 23);
@@ -64,6 +65,7 @@
             // 
             // B_Dump
             // 
+            this.B_Dump.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.B_Dump.Location = new System.Drawing.Point(342, 0);
             this.B_Dump.Name = "B_Dump";
             this.B_Dump.Size = new System.Drawing.Size(53, 23);
@@ -85,13 +87,15 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(461, 494);
+            this.ClientSize = new System.Drawing.Size(461, 681);
             this.Controls.Add(this.B_Rand);
             this.Controls.Add(this.B_Dump);
             this.Controls.Add(this.CB_EntryName);
             this.Controls.Add(this.B_Save);
             this.Controls.Add(this.Grid);
+            this.MinimumSize = new System.Drawing.Size(450, 300);
             this.Name = "GenericEditor";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             this.Text = "GenericEditor";
             this.ResumeLayout(false);
 

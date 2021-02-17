@@ -14,9 +14,9 @@ namespace pkNX.Randomization
         private readonly GameInfo Game;
         private readonly PersonalTable Personal;
         private MoveRandomizer moverand;
-        private Move[] Moves;
+        public IReadOnlyList<Move> Moves { private get; set; } = Array.Empty<Move>();
 
-        public LearnSettings Settings { get; private set; }
+        public LearnSettings Settings { get; private set; } = new();
         public IList<int> BannedMoves { set => moverand.Settings.BannedMoves = value; }
 
         public LearnsetRandomizer(GameInfo game, Learnset[] learnsets, PersonalTable t)
@@ -24,6 +24,9 @@ namespace pkNX.Randomization
             Game = game;
             Learnsets = learnsets;
             Personal = t;
+
+            // temp, overwrite later if using it
+            moverand = new MoveRandomizer(game, Moves, Personal);
         }
 
         private static readonly int[] MetronomeMove = { 118 };
@@ -59,7 +62,7 @@ namespace pkNX.Randomization
             }
         }
 
-        public void Initialize(Move[] moves, LearnSettings settings, MovesetRandSettings moverandset, int[] bannedMoves = null)
+        public void Initialize(Move[] moves, LearnSettings settings, MovesetRandSettings moverandset, int[]? bannedMoves = null)
         {
             Moves = moves;
             Settings = settings;
@@ -71,7 +74,11 @@ namespace pkNX.Randomization
         public override void Execute()
         {
             for (var i = 0; i < Learnsets.Length; i++)
+            {
+                if (Personal[i].HP == 0)
+                    continue;
                 Randomize(Learnsets[i], i);
+            }
         }
 
         private void Randomize(Learnset set, int index)
@@ -120,7 +127,7 @@ namespace pkNX.Randomization
             int[] moves = new int[count];
             if (count == 0)
                 return moves;
-            moves[0] = Settings.STABFirst ? moverand.GetRandomFirstMove(index) : moverand.GetRandomFirstMoveAny();
+            moves[0] = Settings.STABFirst ? moverand.GetRandomFirstMove(index) : MoveRandomizer.GetRandomFirstMoveAny();
             var rand = moverand.GetRandomLearnset(index, count - 1);
 
             // STAB Moves (if requested) come first; randomize the order of moves
@@ -131,12 +138,7 @@ namespace pkNX.Randomization
             return moves;
         }
 
-        public int[] GetHighPoweredMoves(int species, int form, int count = 4)
-        {
-            int index = Personal.GetFormeIndex(species, form);
-            var learn = Learnsets[index];
-            return learn.GetHighPoweredMoves(count, Moves);
-        }
+        internal int[] GetHighPoweredMoves(int species, int form, int count = 4) => GetHighPoweredMoves(Moves, species, form, count);
 
         public int[] GetCurrentMoves(int species, int form, int level, int count = 4)
         {
@@ -144,6 +146,13 @@ namespace pkNX.Randomization
             var moves = Learnsets[i].GetEncounterMoves(level);
             Array.Resize(ref moves, count);
             return moves;
+        }
+
+        public int[] GetHighPoweredMoves(IReadOnlyList<Move> movedata, int species, int form, int count = 4)
+        {
+            int index = Personal.GetFormeIndex(species, form);
+            var learn = Learnsets[index];
+            return learn.GetHighPoweredMoves(count, movedata);
         }
     }
 }

@@ -26,9 +26,9 @@ namespace pkNX.WinForms.Controls
             UpdatingFields = false;
         }
 
-        public PersonalTable Personal { private get; set; }
+        public PersonalTable? Personal { private get; set; }
         public bool UpdatingFields;
-        public StatPKM PKM { get; set; }
+        public StatPKM PKM { get; set; } = new TrainerPoke7b();
 
         private readonly MaskedTextBox[] tb_iv;
         private readonly MaskedTextBox[] tb_ev;
@@ -52,7 +52,11 @@ namespace pkNX.WinForms.Controls
             }
             UpdatingFields = false;
 
-            var pi = Personal.GetFormeEntry(PKM.Species, PKM.Form);
+            var pt = Personal;
+            if (pt == null)
+                throw new NullReferenceException("Personal table hasn't been initialized.");
+
+            var pi = pt.GetFormeEntry(PKM.Species, PKM.Form);
             var stats = PKM.GetStats(pi);
 
             Stat_HP.Text = stats[0].ToString();
@@ -66,6 +70,14 @@ namespace pkNX.WinForms.Controls
             TB_EVTotal.Text = tb_ev.Select(z => Util.ToInt32(z.Text)).Sum().ToString();
             if (PKM is IAwakened s)
                 TB_AVTotal.Text = s.AwakeningSum().ToString();
+
+            var showAV = PKM is IAwakened;
+            Label_AVs.Visible = TB_AVTotal.Visible = FLP_HPType.Visible = showAV;
+            foreach (var mtb in tb_av)
+                mtb.Visible = showAV;
+            Label_EVs.Visible = TB_EVTotal.Visible = FLP_Dynamax.Visible = !showAV;
+            foreach (var mtb in tb_ev)
+                mtb.Visible = !showAV;
 
             // Recolor the Stat Labels based on boosted stats.
             RecolorStatLabels();
@@ -111,7 +123,7 @@ namespace pkNX.WinForms.Controls
 
         private void UpdateIV(object sender, EventArgs e)
         {
-            if (UpdatingFields || !(sender is MaskedTextBox t))
+            if (UpdatingFields || sender is not MaskedTextBox t)
                 return;
             var index = Array.IndexOf(tb_iv, t);
             if (index < 0)
@@ -126,7 +138,7 @@ namespace pkNX.WinForms.Controls
 
         private void UpdateEV(object sender, EventArgs e)
         {
-            if (UpdatingFields || !(sender is MaskedTextBox t))
+            if (UpdatingFields || sender is not MaskedTextBox t)
                 return;
             var index = Array.IndexOf(tb_ev, t);
             if (index < 0)
@@ -138,7 +150,7 @@ namespace pkNX.WinForms.Controls
 
         private void UpdateAV(object sender, EventArgs e)
         {
-            if (UpdatingFields || !(sender is MaskedTextBox t) || !(PKM is IAwakened a))
+            if (UpdatingFields || sender is not MaskedTextBox t || PKM is not IAwakened a)
                 return;
             var index = Array.IndexOf(tb_av, t);
             if (index < 0)

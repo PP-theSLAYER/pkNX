@@ -17,7 +17,7 @@ namespace pkNX.Randomization
         private readonly PersonalTable Table;
         private readonly EvolutionSet[] Evolutions;
 
-        public PersonalRandSettings Settings { get; set; }
+        public PersonalRandSettings Settings { get; set; } = new();
 
         public PersonalRandomizer(PersonalTable table, GameInfo game, EvolutionSet[] evolutions)
         {
@@ -47,7 +47,7 @@ namespace pkNX.Randomization
                 RandomizeSpecies(species);
         }
 
-        private bool[] processed;
+        private bool[] processed = Array.Empty<bool>();
 
         private void RandomizeChains()
         {
@@ -61,9 +61,12 @@ namespace pkNX.Randomization
 
         private bool AlreadyProcessed(int index)
         {
-            if (processed[index])
+            var p = processed;
+            if (p.Length <= index)
+                return false;
+            if (p[index])
                 return true;
-            processed[index] = true;
+            p[index] = true;
             return false;
         }
 
@@ -322,7 +325,7 @@ namespace pkNX.Randomization
                 t[i] = Rand.Next(100) < Settings.LearnTypeTutorPercent;
 
             // Make sure Rayquaza can learn Dragon Ascent.
-            if (!Game.XY && species == 384)
+            if (!Game.XY && species == (int)Species.Rayquaza)
                 t[7] = true;
 
             z.TypeTutors = t;
@@ -395,7 +398,7 @@ namespace pkNX.Randomization
             z.Stats = stats;
         }
 
-        private void RandomShuffledStats(PersonalInfo z)
+        private static void RandomShuffledStats(PersonalInfo z)
         {
             // Fiddle with Base Stats, don't muck with Shedinja.
             var stats = z.Stats;

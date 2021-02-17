@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Drawing;
 using System.Windows.Forms;
 using pkNX.Sprites;
 using pkNX.Structures;
@@ -15,7 +14,7 @@ namespace pkNX.WinForms
 
         public bool OverworldSpawn
         {
-            set => NUD_Count.Visible = NUD_Duration.Visible = L_Count.Visible = L_Duration.Visible = value;
+            set => NUD_Count.Visible = L_Count.Visible = value;
         }
 
         public bool ShowForm
@@ -31,15 +30,19 @@ namespace pkNX.WinForms
             {
                 HeaderText = "Sprite",
                 DisplayIndex = 0,
-                Width = 42,
+                Width = SpriteUtil.Spriter.Width + 2,
                 DefaultCellStyle = { Alignment = DataGridViewContentAlignment.MiddleCenter },
                 ReadOnly = true,
             };
+            var padding = SpriteUtil.Spriter.Height > 40
+                ? new Padding(0, (SpriteUtil.Spriter.Height / 2) - 8, 0, 0)
+                : new Padding(0);
             var dgvSpecies = new DataGridViewComboBoxColumn
             {
                 HeaderText = "Species",
                 DisplayIndex = 1,
                 Width = 135,
+                DefaultCellStyle = { Alignment = DataGridViewContentAlignment.MiddleCenter, Padding = padding },
                 FlatStyle = FlatStyle.Flat
             };
             var dgvForm = new DataGridViewTextBoxColumn
@@ -83,13 +86,13 @@ namespace pkNX.WinForms
             if (!int.TryParse(dgv.Rows[row].Cells[2].Value?.ToString(), out var rate) || (uint)rate > 100)
                 dgv.Rows[row].Cells[3].Value = 0;
 
-            dgv.Rows[row].Cells[0].Value = SpriteBuilder.GetSprite(sp, form, 0, 0, false, false);
+            dgv.Rows[row].Cells[0].Value = SpriteUtil.GetSprite(sp, form, 0, 0, false, false, false);
         }
 
-        private EncounterSlot[] Slots;
-        public static string[] species;
+        private EncounterSlot7b[]? Slots;
+        public static string[] species = Array.Empty<string>();
 
-        public void LoadSlots(EncounterSlot[] slots)
+        public void LoadSlots(EncounterSlot7b[] slots)
         {
             Slots = slots;
 
@@ -102,7 +105,7 @@ namespace pkNX.WinForms
                 row.Cells[1].Value = species[slots[i].Species];
                 row.Cells[2].Value = slots[i].Form;
                 row.Cells[3].Value = slots[i].Probability;
-                row.Height = 32;
+                row.Height = SpriteUtil.Spriter.Height + 2;
             }
 
             dgv.CancelEdit();
@@ -118,9 +121,9 @@ namespace pkNX.WinForms
             }
         }
 
-        private void SaveRow(int row, EncounterSlot s)
+        private void SaveRow(int row, EncounterSlot7b s)
         {
-            int sp = Array.IndexOf(species, dgv.Rows[row].Cells[1].Value);
+            int sp = Array.IndexOf(species, dgv.Rows[row].Cells[1].Value ?? species[0]);
             string formstr = (dgv.Rows[row].Cells[2].Value ?? 0).ToString();
             int.TryParse(formstr, out var form);
             string probstr = (dgv.Rows[row].Cells[3].Value ?? 0).ToString();
@@ -137,7 +140,7 @@ namespace pkNX.WinForms
             s.Probability = prob;
         }
 
-        private void dgv_CurrentCellDirtyStateChanged(object sender, EventArgs e)
+        private void CurrentCellDirtyStateChanged(object sender, EventArgs e)
         {
             if (dgv.IsCurrentCellDirty)
                 dgv.CommitEdit(DataGridViewDataErrorContexts.Commit);

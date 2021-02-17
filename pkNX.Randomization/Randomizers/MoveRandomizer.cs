@@ -7,20 +7,20 @@ namespace pkNX.Randomization
 {
     public class MoveRandomizer : Randomizer
     {
-        private readonly Move[] MoveData;
+        private readonly IReadOnlyList<Move> MoveData;
         private readonly PersonalTable SpeciesStat;
         private readonly GameInfo Config;
 
-        private GenericRandomizer RandMove;
-        internal MovesetRandSettings Settings;
+        private GenericRandomizer<int> RandMove;
+        internal MovesetRandSettings Settings = new();
 
-        public MoveRandomizer(GameInfo config, Move[] moves, PersonalTable t)
+        public MoveRandomizer(GameInfo config, IReadOnlyList<Move> moves, PersonalTable t)
         {
             Config = config;
             var maxMoveId = config.MaxMoveID;
             MoveData = moves;
             SpeciesStat = t;
-            RandMove = new GenericRandomizer(Enumerable.Range(1, maxMoveId - 1).ToArray());
+            RandMove = new GenericRandomizer<int>(Enumerable.Range(1, maxMoveId - 1).ToArray());
         }
 
         public override void Execute() => throw new Exception("Shouldn't be called.");
@@ -31,17 +31,19 @@ namespace pkNX.Randomization
         {
             Settings = settings;
 
-            var nanned = new List<int>();
-            nanned.AddRange(new[] { 165, 621, 464 }.Concat(Legal.Z_Moves)); // Struggle, Hyperspace Fury, Dark Void
+            var banned = new List<int>();
+            banned.AddRange(Legal.Taboo_Moves.Concat(Legal.Z_Moves).Concat(Legal.Max_Moves));
             if (Settings.BanFixedDamageMoves)
-                nanned.AddRange(FixedDamageMoves);
-            nanned.AddRange(bannedMoves);
+                banned.AddRange(FixedDamageMoves);
+            banned.AddRange(bannedMoves);
 
-            Settings.BannedMoves = nanned.ToArray();
+            Settings.BannedMoves = banned.ToArray();
 
             var all = Enumerable.Range(1, Config.MaxMoveID - 1);
-            var moves = all.Except(nanned);
-            RandMove = new GenericRandomizer(moves.ToArray());
+            var moves = all.Except(banned);
+            if (MoveData[0] is Move8Fake)
+                moves = moves.Where(z => ((Move8Fake) MoveData[z]).CanUseMove);
+            RandMove = new GenericRandomizer<int>(moves.ToArray());
         }
 
         public int[] GetRandomLearnset(int index, int movecount) => GetRandomLearnset(SpeciesStat[index].Types, movecount);
@@ -64,7 +66,7 @@ namespace pkNX.Randomization
 
             int[] moves;
             do { moves = GetRandomMoves(Types, movecount); }
-            while (!IsMovesetMeetingRequirements(moves, movecount) && loopctr++ <= maxLoop);
+            while (!IsMovesetMeetingRequirements(moves, Types, movecount) && loopctr++ <= maxLoop);
 
             return moves;
         }
@@ -72,13 +74,14 @@ namespace pkNX.Randomization
         private int[] GetRandomMoves(int[] Types, int movecount = 4)
         {
             int[] moves = new int[movecount];
+            int i = 0;
             if (Settings.STAB)
             {
-                for (int i = 0; i < Settings.STABCount; i++)
+                for (; i < Settings.STABCount; i++)
                     moves[i] = GetRandomSTABMove(Types);
             }
 
-            for (int i = 0; i < moves.Length; i++) // remainder of moves
+            for (; i < moves.Length; i++) // remainder of moves
                 moves[i] = RandMove.Next();
             return moves;
         }
@@ -92,10 +95,17 @@ namespace pkNX.Randomization
             return move;
         }
 
-        private bool IsMovesetMeetingRequirements(int[] moves, int count)
+        private bool IsMovesetMeetingRequirements(int[] moves, int[] types, int count)
         {
             if (Settings.DMG && Settings.DMGCount > moves.Count(move => MoveData[move].Category != 0))
                 return false;
+
+            if (Settings.STAB)
+            {
+                var stabCt = moves.Count(move => types.Contains(MoveData[move].Type));
+                if (stabCt < Settings.STABCount)
+                    return false;
+            }
 
             if (moves.Any(Settings.BannedMoves.Contains))
                 return false;
@@ -103,11 +113,13 @@ namespace pkNX.Randomization
             return moves.Distinct().Count() == count;
         }
 
-        public void ReorderMovesPower(IList<int> moves)
+        public void ReorderMovesPower(IList<int> moves) => ReorderMovesPower(moves, MoveData);
+
+        private static void ReorderMovesPower(IList<int> moves, IReadOnlyList<Move> movedata)
         {
-            var data = moves.Select((Move, Index) => new { Index, Move, Data = MoveData[Move] });
+            var data = moves.Select((Move, Index) => new { Index, Move, Data = movedata[Move] });
             var powered = data.Where(z => z.Data.Power > 1).ToList();
-            var indexes = powered.Select(z => z.Index).ToList();
+            var indexes = powered.ConvertAll(z => z.Index);
             var order = powered.OrderBy(z => z.Data.Power * Math.Max(1, (z.Data.HitMin + z.Data.HitMax) / 2m)).ToList();
 
             for (var i = 0; i < order.Count; i++)
@@ -128,9 +140,9 @@ namespace pkNX.Randomization
             141, // Leech Life
         };
 
-        private static readonly GenericRandomizer first = new GenericRandomizer(firstMoves);
+        private static readonly GenericRandomizer<int> first = new(firstMoves);
 
-        public int GetRandomFirstMoveAny()
+        public static int GetRandomFirstMoveAny()
         {
             first.Reset();
             return first.Next();

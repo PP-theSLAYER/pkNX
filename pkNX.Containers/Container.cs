@@ -12,28 +12,27 @@ namespace pkNX.Containers
         /// <param name="t">File type</param>
         public static IFileContainer GetContainer(string path, ContainerType t)
         {
-            switch (t)
+            return t switch
             {
-                case ContainerType.GARC: return new GARC(path);
-                case ContainerType.Mini: return MiniUtil.GetMini(path);
-                case ContainerType.SARC: return new SARC(path);
-                case ContainerType.Folder: return new FolderContainer(path);
-                case ContainerType.SingleFile: return new SingleFileContainer(path);
-                case ContainerType.GFPack: return new GFPack(path);
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(t), t, null);
-            }
+                ContainerType.GARC => new GARC(path),
+                ContainerType.Mini => MiniUtil.GetMini(path),
+                ContainerType.SARC => new SARC(path),
+                ContainerType.Folder => new FolderContainer(path),
+                ContainerType.SingleFile => new SingleFileContainer(path),
+                ContainerType.GFPack => new GFPack(path),
+                _ => throw new ArgumentOutOfRangeException(nameof(t), t, null)
+            };
         }
 
         /// <summary>
         /// Gets a <see cref="IFileContainer"/> for the stream.
         /// </summary>
         /// <param name="path">Path to the binary data</param>
-        public static IFileContainer GetContainer(string path)
+        public static IFileContainer? GetContainer(string path)
         {
             var fs = new FileStream(path, FileMode.Open);
             var container = GetContainer(fs);
-            if (!(container is LargeContainer)) // not kept
+            if (container is not LargeContainer) // not kept
                 fs.Dispose();
             if (container == null)
                 return null;
@@ -46,11 +45,11 @@ namespace pkNX.Containers
         /// Gets a <see cref="IFileContainer"/> for the stream.
         /// </summary>
         /// <param name="stream">Stream for the binary data</param>
-        public static IFileContainer GetContainer(Stream stream)
+        public static IFileContainer? GetContainer(Stream stream)
         {
-            BinaryReader br = new BinaryReader(stream);
+            var br = new BinaryReader(stream);
             var container = GetContainer(br);
-            if (!(container is LargeContainer)) // not kept
+            if (container is not LargeContainer) // not kept
                 br.Dispose();
             return container;
         }
@@ -59,9 +58,9 @@ namespace pkNX.Containers
         /// Gets a <see cref="IFileContainer"/> for the stream within the <see cref="BinaryReader"/>.
         /// </summary>
         /// <param name="br">Reader for the binary data</param>
-        public static IFileContainer GetContainer(BinaryReader br)
+        public static IFileContainer? GetContainer(BinaryReader br)
         {
-            IFileContainer container;
+            IFileContainer? container;
             if ((container = GARC.GetGARC(br)) != null)
                 return container;
             if ((container = MiniUtil.GetMini(br)) != null)

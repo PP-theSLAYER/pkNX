@@ -23,7 +23,8 @@ namespace pkNX.WinForms
             {
                 var index = (EvolutionType)CB_Method.SelectedIndex;
                 var type = index.GetArgType();
-                CB_Arg.Visible = type >= EvolutionTypeArgumentType.Items;
+                L_Method.Visible = L_Species.Visible = L_Arg.Visible = L_Form.Visible = L_Level.Visible = index > 0;
+                L_Arg.Visible = CB_Arg.Visible = type >= EvolutionTypeArgumentType.Items;
                 if (type == oldMethod)
                     return;
 
@@ -39,9 +40,9 @@ namespace pkNX.WinForms
             };
         }
 
-        private void ChangeSpecies(int spec, int form) => PB_Preview.Image = SpriteBuilder.GetSprite(spec, form, 0, 0, false, false);
+        private void ChangeSpecies(int spec, int form) => PB_Preview.Image = SpriteUtil.GetSprite(spec, form, 0, 0, false, false, false);
 
-        private EvolutionMethod current;
+        private EvolutionMethod? current;
         private EvolutionTypeArgumentType oldMethod;
 
         public void LoadEvolution(EvolutionMethod s)
@@ -57,6 +58,8 @@ namespace pkNX.WinForms
         public void SaveEvolution()
         {
             var evo = current;
+            if (evo == null)
+                return;
             evo.Species = CB_Species.SelectedIndex;
             evo.Form = (int)NUD_Form.Value;
             evo.Level = (int)NUD_Level.Value;
@@ -64,31 +67,30 @@ namespace pkNX.WinForms
             evo.Argument = CB_Arg.SelectedIndex;
         }
 
-        public static string[] items;
-        public static string[] movelist;
-        public static string[] species;
-        public static string[] types;
+        public static string[] items = Array.Empty<string>();
+        public static string[] movelist = Array.Empty<string>();
+        public static string[] species = Array.Empty<string>();
+        public static string[] types = Array.Empty<string>();
 
         private static readonly string[] EvoMethods = Enum.GetNames(typeof(EvolutionType));
         private static readonly string[] Levels = Enumerable.Range(0, 100 + 1).Select(z => z.ToString()).ToArray();
         private static readonly string[] Stats = Enumerable.Range(0, 255 + 1).Select(z => z.ToString()).ToArray();
         private static readonly string[] None = { "" };
 
-        private string[] GetArgs(EvolutionTypeArgumentType type)
+        private static string[] GetArgs(EvolutionTypeArgumentType type)
         {
-            switch (type)
+            return type switch
             {
-                case EvolutionTypeArgumentType.NoArg: return None;
-                case EvolutionTypeArgumentType.Level: return Levels;
-                case EvolutionTypeArgumentType.Items: return items;
-                case EvolutionTypeArgumentType.Moves: return movelist;
-                case EvolutionTypeArgumentType.Species: return species;
-                case EvolutionTypeArgumentType.Stat: return Stats;
-                case EvolutionTypeArgumentType.Type: return types;
-                case EvolutionTypeArgumentType.Version: return Stats;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(type), type, null);
-            }
+                EvolutionTypeArgumentType.NoArg => None,
+                EvolutionTypeArgumentType.Level => Levels,
+                EvolutionTypeArgumentType.Items => items,
+                EvolutionTypeArgumentType.Moves => movelist,
+                EvolutionTypeArgumentType.Species => species,
+                EvolutionTypeArgumentType.Stat => Stats,
+                EvolutionTypeArgumentType.Type => types,
+                EvolutionTypeArgumentType.Version => Stats,
+                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+            };
         }
     }
 }

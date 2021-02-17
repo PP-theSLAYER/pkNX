@@ -62,6 +62,10 @@ namespace pkNX.Game
         private const int FILECOUNT_SM = 311;
         private const int FILECOUNT_USUM = 333;
         private const int FILECOUNT_GG = 27818;
+        private const int FILECOUNT_SWSH = 41702;
+        private const int FILECOUNT_SWSH_1 = 41951; // Ver. 1.1.0 update (Galarian Slowpoke)
+        private const int FILECOUNT_SWSH_2 = 46867; // Ver. 1.2.0 update (Isle of Armor)
+        private const int FILECOUNT_SWSH_3 = 50494; // Ver. 1.3.0 update (Crown Tundra)
 
         private static GameVersion GetGameFromCount(int fileCount, string romfs)
         {
@@ -84,10 +88,15 @@ namespace pkNX.Game
                     if (File.Exists(encdata) && new FileInfo(encdata).Length != 0)
                         return GameVersion.US;
                     return GameVersion.UM;
-                    }
+                }
                 case FILECOUNT_GG:
                     return GameVersion.GG;
 
+                case FILECOUNT_SWSH:
+                case FILECOUNT_SWSH_1:
+                case FILECOUNT_SWSH_2:
+                case FILECOUNT_SWSH_3:
+                    return GameVersion.SW; // todo: differentiate between SW/SH
                 default:
                     return GameVersion.Invalid;
             }

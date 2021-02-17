@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using pkNX.Structures;
+using static pkNX.Structures.Species;
 
 namespace pkNX.Sprites
 {
@@ -13,7 +14,7 @@ namespace pkNX.Sprites
                 return false;
             if (!Legal.Totem_USUM.Contains(species))
                 return false;
-            if (species == 778) // Mimikyu
+            if (species == (int)Mimikyu)
                 return form == 2 || form == 3;
             if (Legal.Totem_Alolan.Contains(species))
                 return form == 2;
@@ -22,25 +23,20 @@ namespace pkNX.Sprites
 
         public static int GetTotemBaseForm(int species, int form)
         {
-            if (species == 778) // Mimikyu
+            if (species == (int)Mimikyu)
                 return form - 2;
             return form - 1;
         }
 
         public static bool IsValidOutOfBoundsForme(int species, int form, int generation)
         {
-            switch (species)
+            return (Species) species switch
             {
-                case 201: // Unown
-                    return form < (generation == 2 ? 26 : 28); // A-Z : A-Z?!
-                case 414: // Wormadam base form is kept
-                    return form < 3;
-                case 664:
-                case 665: // Vivillon Pre-evolutions
-                    return form < 18;
-                default:
-                    return false;
-            }
+                Unown => form < (generation == 2 ? 26 : 28), // A-Z : A-Z?!
+                Mothim => form < 3, // Wormadam base form is kept
+                Scatterbug or Spewpa => form < 18,
+                _ => false
+            };
         }
 
         /// <summary>
@@ -57,11 +53,12 @@ namespace pkNX.Sprites
             return count > 1;
         }
 
-        private static readonly HashSet<int> HasFormeValuesNotIndicatedByPersonal = new HashSet<int>
+        private static readonly HashSet<int> HasFormeValuesNotIndicatedByPersonal = new()
         {
-            201, // Unown
-            414, // Mothim (Burmy forme carried over, not cleared)
-            664, 665, // Vivillon pre-evos
+            (int)Unown,
+            (int)Mothim, // Burmy forme carried over, not cleared
+            (int)Scatterbug,
+            (int)Spewpa, // Vivillon pre-evos
         };
     }
 }

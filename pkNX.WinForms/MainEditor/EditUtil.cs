@@ -11,16 +11,16 @@ namespace pkNX.WinForms
     [Serializable]
     public class SharedSettings
     {
-        public PersonalRandSettings Personal { get; set; } = new PersonalRandSettings();
-        public SpeciesSettings Species { get; set; } = new SpeciesSettings();
-        public TrainerRandSettings Trainer { get; set; } = new TrainerRandSettings();
-        public MovesetRandSettings Move { get; set; } = new MovesetRandSettings();
-        public LearnSettings Learn { get; set; } = new LearnSettings();
+        public PersonalRandSettings Personal { get; set; } = new();
+        public SpeciesSettings Species { get; set; } = new();
+        public TrainerRandSettings Trainer { get; set; } = new();
+        public MovesetRandSettings Move { get; set; } = new();
+        public LearnSettings Learn { get; set; } = new();
     }
 
     public static class EditUtil
     {
-        public static SharedSettings Settings { get; set; }
+        public static SharedSettings Settings { get; set; } = new();
 
         public static void LoadSettings(GameVersion game)
         {
@@ -31,38 +31,34 @@ namespace pkNX.WinForms
                 return;
             }
 
-            using (var file = File.OpenRead(path))
+            using var file = File.OpenRead(path);
+            var reader = new XmlSerializer(typeof(SharedSettings));
+            try
             {
-                var reader = new XmlSerializer(typeof(SharedSettings));
-                try
-                {
-                    Settings = (SharedSettings) reader.Deserialize(file);
-                }
-                catch (Exception e)
-                {
-                    Debug.WriteLine(e.Message);
-                }
+                Settings = (SharedSettings?) reader.Deserialize(file) ?? new SharedSettings();
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e.Message);
             }
         }
 
         public static void SaveSettings(GameVersion game)
         {
             string path = GetSettingsFileName(game);
-            using (var file = File.Create(path))
+            using var file = File.Create(path);
+            var writer = new XmlSerializer(typeof(SharedSettings));
+            try
             {
-                var writer = new XmlSerializer(typeof(SharedSettings));
-                try
-                {
-                    writer.Serialize(file, Settings);
-                }
-                catch (Exception e)
-                {
-                    Debug.WriteLine(e.Message);
-                    if (!File.Exists(path))
-                        return;
-                    file.Close();
-                    File.Delete(path);
-                }
+                writer.Serialize(file, Settings);
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e.Message);
+                if (!File.Exists(path))
+                    return;
+                file.Close();
+                File.Delete(path);
             }
         }
 

@@ -9,32 +9,39 @@ namespace pkNX.Game
         public Func<byte[], T> Create { private get; set; }
         public Func<T, byte[]> Write { protected get; set; }
 
-        protected DataCache(T[] cache) => Cache = cache;
+        public DataCache(T[] cache) => Cache = cache;
         public DataCache(IFileContainer f) : this(new T[f.Count]) => Data = f;
 
         protected readonly T[] Cache;
+        private bool Cached;
 
         public int Length => Cache.Length;
 
         public T this[int index]
         {
-            get => Cache[index] ?? (Cache[index] = Create(Data[index]));
+            get => Cache[index] ??= Create(Data[index]);
             set => Cache[index] = value;
         }
 
         public void CancelEdits()
         {
             for (int i = 0; i < Cache.Length; i++)
-                Cache[i] = default(T);
+                Cache[i] = default;
         }
 
         public void Initialize() { }
 
         public T[] LoadAll()
         {
+            if (Cached)
+                return Cache;
             for (int i = 0; i < Length; i++)
+            {
                 // ReSharper disable once AssignmentIsFullyDiscarded
                 _ = this[i]; // force load cache
+            }
+
+            Cached = true;
             return Cache;
         }
 

@@ -9,23 +9,28 @@ using pkNX.Structures;
 
 namespace pkNX.WinForms
 {
-    public partial class GGWE : Form
+    public sealed partial class GGWE : Form
     {
-        private readonly EncounterArchive Tables;
+        private readonly EncounterArchive7b Tables;
         private readonly GameManager ROM;
         private int entry = -1;
 
-        public GGWE(GameManager rom, string json)
+        public GGWE(GameManager rom, EncounterArchive7b obj)
         {
             InitializeComponent();
-            EncounterArchive obj = EncounterArchive.ReadJson(json);
+            if (obj.EncounterTables.Length == 0 || obj.EncounterTables[0].GroundTable.Length == 0)
+            {
+                WinFormsUtil.Error("Bad data provided.", $"Unable to parse to {nameof(EncounterArchive7b)} data.");
+                Close();
+            }
+
             ROM = rom;
 
             var spec = rom.GetStrings(TextName.SpeciesNames);
             var species = (string[]) spec.Clone();
             species[0] = "";
             EncounterList.species = species;
-            var locs = rom.GetStrings(TextName.metlist_000000);
+            var locs = rom.GetStrings(TextName.metlist_00000);
 
             EL_Ground.Initialize();
             EL_Water.Initialize();
@@ -75,7 +80,7 @@ namespace pkNX.WinForms
         private static IEnumerable<string> GetScreenedNames(IEnumerable<string> names)
         {
             int ctr = 0;
-            string prev = null;
+            string? prev = null;
             foreach (var name in names)
             {
                 if (name != prev)
@@ -92,7 +97,7 @@ namespace pkNX.WinForms
             }
         }
 
-        private static readonly Dictionary<string, int> LocIDTable = new Dictionary<string, int>
+        private static readonly Dictionary<string, int> LocIDTable = new()
         {
             ["forest001"] = 39,
             ["r004d0101"] = 40,
@@ -271,9 +276,8 @@ namespace pkNX.WinForms
             EL_Old.SaveCurrent();
             EL_Good.SaveCurrent();
             EL_Super.SaveCurrent();
+            EL_Sky.SaveCurrent();
         }
-
-        public string Result { get; set; }
 
         private void B_Save_Click(object sender, EventArgs e)
         {
@@ -283,9 +287,10 @@ namespace pkNX.WinForms
             EL_Old.SaveCurrent();
             EL_Good.SaveCurrent();
             EL_Super.SaveCurrent();
+            EL_Sky.SaveCurrent();
 
-            Result = Tables.WriteJson();
-            // Clipboard.SetText(Result);
+            DialogResult = DialogResult.OK;
+
             Close();
         }
 
@@ -344,18 +349,29 @@ namespace pkNX.WinForms
             settings.Gen2 = settings.Gen3 = settings.Gen4 = settings.Gen5 = settings.Gen6 = settings.Gen7 = false;
             var rand = new SpeciesRandomizer(ROM.Info, ROM.Data.PersonalData);
             rand.Initialize(settings, 808, 809);
-            RandomizeWild(rand, CHK_FillEmpty.Checked);
+            RandomizeWild(rand, CHK_FillEmpty.Checked, CHK_Level.Checked);
             LoadEntry(entry);
             System.Media.SystemSounds.Asterisk.Play();
         }
 
-        private void RandomizeWild(SpeciesRandomizer rand, bool fill)
+        private void RandomizeWild(SpeciesRandomizer rand, bool fill, bool boost)
         {
             var pt = ROM.Data.PersonalData;
             bool IsGrassOrWater(int s) => pt[s].IsType((int)Types.Water) || pt[s].IsType((int)Types.Grass);
 
             foreach (var area in Tables.EncounterTables)
             {
+                if (boost)
+                {
+                    area.GroundTableLevelMin = Legal.GetModifiedLevel(area.GroundTableLevelMin, (double)NUD_LevelBoost.Value);
+                    area.GroundTableLevelMax = Legal.GetModifiedLevel(area.GroundTableLevelMax, (double)NUD_LevelBoost.Value);
+
+                    area.WaterTableLevelMin = Legal.GetModifiedLevel(area.WaterTableLevelMin, (double)NUD_LevelBoost.Value);
+                    area.WaterTableLevelMax = Legal.GetModifiedLevel(area.WaterTableLevelMax, (double)NUD_LevelBoost.Value);
+
+                    area.SkyTableLevelMin = Legal.GetModifiedLevel(area.SkyTableLevelMin, (double)NUD_LevelBoost.Value);
+                    area.SkyTableLevelMax = Legal.GetModifiedLevel(area.SkyTableLevelMax, (double)NUD_LevelBoost.Value);
+                }
                 ApplyRand(area.GroundTable);
                 ApplyRand(area.WaterTable);
                 ApplyRand(area.SkyTable);
@@ -365,7 +381,7 @@ namespace pkNX.WinForms
                 ApplyRand(area.SuperRodTable);
             }
 
-            void ApplyRand(IList<EncounterSlot> slots)
+            void ApplyRand(IList<EncounterSlot7b> slots)
             {
                 if (slots[0].Species == 0)
                     return;
@@ -396,12 +412,31 @@ namespace pkNX.WinForms
             }
         }
 
-        public static readonly Dictionary<int, int[]> RandomScaledRates = new Dictionary<int, int[]>
+        public static readonly Dictionary<int, int[]> RandomScaledRates = new()
         {
             [01] = new[] {100},
             [04] = new[] {60, 30, 7, 3},
             [05] = new[] {40, 30, 18, 10, 2},
             [10] = new[] {20, 15, 15, 10, 10, 10, 10, 5, 4, 1},
         };
+
+        private void B_Dump_Click(object sender, EventArgs e)
+        {
+            var strings = GetEncounterTableSummary(ROM, Tables);
+            var result = string.Join(Environment.NewLine, strings);
+            Clipboard.SetText(result);
+            System.Media.SystemSounds.Asterisk.Play();
+        }
+
+        private static IEnumerable<string> GetEncounterTableSummary(GameManager rom, EncounterArchive7b table)
+        {
+            var locationNames = rom.GetStrings(TextName.metlist_00000);
+            var specs = rom.GetStrings(TextName.SpeciesNames);
+
+            var locs = table.EncounterTables.Select(z => z.ZoneID);
+            var names = GetNames(locs, locationNames);
+            var dupeNamed = GetScreenedNames(names).ToArray();
+            return EncounterTable7bUtil.GetLines(table, dupeNamed, specs);
+        }
     }
 }

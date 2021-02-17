@@ -43,12 +43,16 @@ namespace pkNX.Randomization
         [Category(General), Description("Allows Generation 7 species when randomizing.")]
         public bool Gen7 { get; set; } = true;
 
+        /// <summary>Allows Generation 8 species when randomizing.</summary>
+        [Category(General), Description("Allows Generation 8 species when randomizing.")]
+        public bool Gen8 { get; set; } = true;
+
         /// <summary>Allows Legendary species when randomizing.</summary>
         [Category(Misc), Description("Allows Legendary species when randomizing.")]
         public bool Legends { get; set; } = false;
 
-        /// <summary>Allows Event-only species when randomizing.</summary>
-        [Category(Misc), Description("Allows Event-only species when randomizing.")]
+        /// <summary>Allows Event-only (Mythical) species when randomizing.</summary>
+        [Category(Misc), Description("Allows Event-only (Mythical) species when randomizing.")]
         public bool Events { get; set; } = false;
 
         /// <summary>Allows Shedinja as a random species when randomizing.</summary>
@@ -67,6 +71,14 @@ namespace pkNX.Randomization
         [Category(Misc), Description("Requires the randomized species to have a similar typing as the original species. Note: might not be used by all randomizers.")]
         public bool Type { get; set; } = false;
 
+        /// <summary>Makes the appearance of Legendary Pokémon to appear on boosted rates (percent). Ignored if 0 or Legends setting on Species is False.</summary>
+        [Category(Misc), Description("Makes the appearance of Legendary Pokémon to appear on boosted rates (percent). Ignored if 0 or Legends setting on Species is False.")]
+        public float LegendsChance { get; set; } = 2.5f;
+
+        /// <summary>Makes the appearance of Event (Mythical) Pokémon to appear on boosted rates (percent). Ignored if 0 or Legends setting on Species is False.</summary>
+        [Category(Misc), Description("Makes the appearance of Event (Mythical) Pokémon to appear on boosted rates (percent).")]
+        public float EventsChance { get; set; } = 2.5f;
+
         /// <summary>
         /// Gets an array of Species according to the specified settings.
         /// </summary>
@@ -83,25 +95,26 @@ namespace pkNX.Randomization
             if (Gen5) AddGen5Species(list, maxSpecies);
             if (Gen6) AddGen6Species(list, maxSpecies);
             if (Gen7) AddGen7Species(list, maxSpecies);
+            if (Gen8) AddGen8Species(list, maxSpecies);
 
-            if (generation == 7 && Gen1 && maxSpecies <= Legal.MaxSpeciesID_7_GG)
+            if (generation == 7 && Gen1 && Events && maxSpecies <= Legal.MaxSpeciesID_7_GG)
                 AddGGEvents(list);
 
             return list.Count == 0 ? GetSpeciesAll(maxSpecies) : list.ToArray();
         }
 
-        private int[] GetSpeciesAll(int maxSpecies) => Enumerable.Range(1, maxSpecies).ToArray();
+        private static int[] GetSpeciesAll(int maxSpecies) => Enumerable.Range(1, maxSpecies).ToArray();
 
         private void AddGen1Species(List<int> list, int maxSpecies)
         {
             if (maxSpecies <= 0)
                 return;
             list.AddRange(Enumerable.Range(1, 143)); // Bulbasaur - Snorlax
-            list.AddRange(Enumerable.Range(147, 3)); // Dratini - Dragonite
+            list.AddRange(Enumerable.Range(147, 3)); // Dratini, Dragonair, Dragonite
 
             if (Legends)
             {
-                list.AddRange(Enumerable.Range(144, 3)); // Birds
+                list.AddRange(Enumerable.Range(144, 3)); // Articuno, Zapdos, Moltres
                 list.Add(150); // Mewtwo
             }
             if (Events) list.Add(151); // Mew
@@ -116,8 +129,8 @@ namespace pkNX.Randomization
 
             if (Legends)
             {
-                list.AddRange(Enumerable.Range(243, 3)); // Beasts
-                list.AddRange(Enumerable.Range(249, 2)); // Lugia & Ho-Oh
+                list.AddRange(Enumerable.Range(243, 3)); // Raikou, Entei, Suicune
+                list.AddRange(Enumerable.Range(249, 2)); // Lugia, Ho-Oh
             }
             if (Events) list.Add(251); // Celebi
         }
@@ -129,8 +142,8 @@ namespace pkNX.Randomization
             list.AddRange(Enumerable.Range(252, 40)); // Treecko - Ninjask
             list.AddRange(Enumerable.Range(293, 84)); // Whismur - Metagross
             if (Shedinja) list.Add(292); // Shedinja
-            if (Legends) list.AddRange(Enumerable.Range(377, 8)); // Regi, Lati, Mascot
-            if (Events) list.AddRange(Enumerable.Range(385, 2)); // Jirachi/Deoxys
+            if (Legends) list.AddRange(Enumerable.Range(377, 8)); // Hoenn Legendaries
+            if (Events) list.AddRange(Enumerable.Range(385, 2)); // Jirachi, Deoxys
         }
 
         private void AddGen4Species(List<int> list, int maxSpecies)
@@ -138,7 +151,7 @@ namespace pkNX.Randomization
             if (maxSpecies <= 386)
                 return;
             list.AddRange(Enumerable.Range(387, 93)); // Turtwig - Rotom
-            if (Legends) list.AddRange(Enumerable.Range(480, 9)); // Sinnoh Legends
+            if (Legends) list.AddRange(Enumerable.Range(480, 9)); // Sinnoh Legendaries
             if (Events) list.AddRange(Enumerable.Range(489, 5)); // Phione, Manaphy, Darkrai, Shaymin, Arceus
         }
 
@@ -147,7 +160,7 @@ namespace pkNX.Randomization
             if (maxSpecies <= 493)
                 return;
             list.AddRange(Enumerable.Range(495, 143)); // Snivy - Volcarona
-            if (Legends) list.AddRange(Enumerable.Range(638, 9)); // Unova Legends
+            if (Legends) list.AddRange(Enumerable.Range(638, 9)); // Unova Legendaries
             if (Events) list.Add(494); list.AddRange(Enumerable.Range(647, 3)); // Victini, Keldeo, Meloetta, Genesect
         }
 
@@ -156,13 +169,13 @@ namespace pkNX.Randomization
             if (maxSpecies <= 649)
                 return;
             list.AddRange(Enumerable.Range(650, 66)); // Chespin - Noivern
-            if (Legends) list.AddRange(Enumerable.Range(716, 3)); // Kalos Legends
+            if (Legends) list.AddRange(Enumerable.Range(716, 3)); // Kalos Legendaries
             if (Events) list.AddRange(Enumerable.Range(719, 3)); // Diancie, Hoopa, Volcanion
         }
 
         private void AddGen7Species(List<int> list, int maxSpecies)
         {
-            if (maxSpecies <= 721)
+            if (maxSpecies <= Legal.MaxSpeciesID_6)
                 return;
             list.AddRange(Enumerable.Range(722, 50)); // Rowlet - Pyukumuku
             list.AddRange(Enumerable.Range(774, 11)); // Minior - Kommo-o
@@ -170,7 +183,7 @@ namespace pkNX.Randomization
             if (Legends)
             {
                 list.AddRange(Enumerable.Range(772, 2)); // Type: Null, Silvally
-                list.AddRange(Enumerable.Range(785, 16)); // Tapus, Legends, UBs
+                list.AddRange(Enumerable.Range(785, 16)); // Alola Legendaries, Ultra Beasts
             }
             if (Events) list.AddRange(Enumerable.Range(801, 2)); // Magearna, Marshadow
 
@@ -179,16 +192,31 @@ namespace pkNX.Randomization
                 if (Legends) list.AddRange(Enumerable.Range(803, 4)); // Poipole, Naganadel, Stakataka, Blacephalon
                 if (Events) list.Add(807); // Zeraora
             }
-            if (maxSpecies >= Legal.MaxSpeciesID_7_GG) // USUM
+            if (maxSpecies >= Legal.MaxSpeciesID_7_GG) // LGPE
             {
                 if (Events)
                     AddGGEvents(list);
             }
         }
 
-        private void AddGGEvents(List<int> list)
+        private void AddGen8Species(List<int> list, int maxSpecies)
         {
-            list.AddRange(Enumerable.Range(808, Legal.MaxSpeciesID_7_GG - Legal.MaxSpeciesID_7_USUM)); // *
+            if (maxSpecies <= Legal.MaxSpeciesID_7_GG)
+                return;
+            list.AddRange(Enumerable.Range(810, 78)); // Grookey - Dragapult
+
+            if (Legends)
+            {
+                list.AddRange(Enumerable.Range(888, 3)); // Zacian, Zamazenta, Eternatus
+                list.AddRange(Enumerable.Range(891, 2)); // Kubfu, Urshifu
+                list.AddRange(Enumerable.Range(894, 5)); // Regieleki, Regidrago, Glastrier, Spectrier, Calyrex
+            }
+            if (Events) list.Add(893); // Zarude
+        }
+
+        private static void AddGGEvents(List<int> list)
+        {
+            list.AddRange(Enumerable.Range(808, Legal.MaxSpeciesID_7_GG - Legal.MaxSpeciesID_7_USUM)); // Meltan, Melmetal
         }
     }
 }

@@ -1,6 +1,8 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using pkNX.Containers;
 using pkNX.Game;
 using pkNX.Randomization;
 using pkNX.Structures;
@@ -16,7 +18,7 @@ namespace pkNX.WinForms.Controls
             var text = ROM.GetFilteredFolder(GameFile.GameText, z => Path.GetExtension(z) == ".dat");
             var config = new TextConfig(ROM.Game);
             var tc = new TextContainer(text, config);
-            var form = new TextEditor(tc, TextEditor.TextEditorMode.Common);
+            using var form = new TextEditor(tc, TextEditor.TextEditorMode.Common);
             form.ShowDialog();
             if (!form.Modified)
                 text.CancelEdits();
@@ -27,7 +29,7 @@ namespace pkNX.WinForms.Controls
             var text = ROM.GetFilteredFolder(GameFile.StoryText, z => Path.GetExtension(z) == ".dat");
             var config = new TextConfig(ROM.Game);
             var tc = new TextContainer(text, config);
-            var form = new TextEditor(tc, TextEditor.TextEditorMode.Script);
+            using var form = new TextEditor(tc, TextEditor.TextEditorMode.Script);
             form.ShowDialog();
             if (!form.Modified)
                 text.CancelEdits();
@@ -47,7 +49,7 @@ namespace pkNX.WinForms.Controls
                 TrainerClass = ROM.GetFilteredFolder(GameFile.TrainerClass),
             };
             editor.Initialize();
-            var form = new BTTE(ROM, editor);
+            using var form = new BTTE(ROM, editor);
             form.ShowDialog();
             if (!form.Modified)
                 editor.CancelEdits();
@@ -63,8 +65,9 @@ namespace pkNX.WinForms.Controls
                 Learn = ROM.Data.LevelUpData,
                 Mega = ROM.Data.MegaEvolutionData,
                 Personal = ROM.Data.PersonalData,
+                TMHM = Legal.TMHM_GG,
             };
-            var form = new PokeDataUI(editor, ROM);
+            using var form = new PokeDataUI(editor, ROM);
             form.ShowDialog();
             if (!form.Modified)
                 editor.CancelEdits();
@@ -80,7 +83,7 @@ namespace pkNX.WinForms.Controls
                 Create = Item.FromBytes,
                 Write = item => item.Write(),
             };
-            var form = new GenericEditor<Item>(cache, ROM.GetStrings(TextName.ItemNames), "Item Editor");
+            using var form = new GenericEditor<Item>(cache, ROM.GetStrings(TextName.ItemNames), "Item Editor");
             form.ShowDialog();
             if (!form.Modified)
                 cache.CancelEdits();
@@ -96,7 +99,7 @@ namespace pkNX.WinForms.Controls
                 Create = data => new Move7(data),
                 Write = move => move.Write(),
             };
-            var form = new GenericEditor<Move7>(cache, ROM.GetStrings(TextName.MoveNames), "Move Editor");
+            using var form = new GenericEditor<Move7>(cache, ROM.GetStrings(TextName.MoveNames), "Move Editor");
             form.ShowDialog();
             if (!form.Modified)
                 cache.CancelEdits();
@@ -109,7 +112,7 @@ namespace pkNX.WinForms.Controls
             var file = ROM[GameFile.EncounterGift];
             var data = file[0];
             var objs = data.GetArray(z => new EncounterGift7b(z), EncounterGift7b.SIZE); // binary
-            var names = Enumerable.Range(0, objs.Length).Select(z => $"{z:00}").ToArray();
+            var names = Enumerable.Range(0, objs.Length).Select(z => $"{z:000}").ToArray();
             var cache = new DirectCache<EncounterGift7b>(objs);
 
             void Randomize()
@@ -117,15 +120,22 @@ namespace pkNX.WinForms.Controls
                 var spec = EditUtil.Settings.Species;
                 spec.Gen2 = spec.Gen3 = spec.Gen4 = spec.Gen5 = spec.Gen6 = spec.Gen7 = false;
                 var srand = new SpeciesRandomizer(ROM.Info, ROM.Data.PersonalData);
+                var frand = new FormRandomizer(ROM.Data.PersonalData);
                 srand.Initialize(spec);
                 foreach (var t in objs)
                 {
-                    t.Species = srand.GetRandomSpecies(t.Species);
-                    t.Form = Legal.GetRandomForme(t.Species, false, true, ROM.Data.PersonalData);
+                    t.Species = (Species)srand.GetRandomSpecies((int)t.Species);
+                    t.Form = frand.GetRandomForme((int)t.Species, false, false, true, false, ROM.Data.PersonalData.Table);
+                    t.Nature = Nature.Random25;
+                    t.Gender = FixedGender.Random;
+                    t.Shiny = Shiny.Random;
+                    t.RelearnMoves = new[] { 0, 0, 0, 0 };
+                    if (t.IV_HP != -4)
+                        t.IVs = new[] { -1, -1, -1, -1, -1, -1 };
                 }
             }
 
-            var form = new GenericEditor<EncounterGift7b>(cache, names, "Gift Editor", Randomize);
+            using var form = new GenericEditor<EncounterGift7b>(cache, names, "Gift Editor", Randomize);
             form.ShowDialog();
             if (!form.Modified)
                 file.CancelEdits();
@@ -138,7 +148,7 @@ namespace pkNX.WinForms.Controls
             var file = ROM[GameFile.EncounterTrade];
             var data = file[0];
             var objs = data.GetArray(z => new EncounterTrade7b(z), EncounterTrade7b.SIZE); // binary
-            var names = Enumerable.Range(0, objs.Length).Select(z => $"{z:00}").ToArray();
+            var names = Enumerable.Range(0, objs.Length).Select(z => $"{z:000}").ToArray();
             var cache = new DirectCache<EncounterTrade7b>(objs);
 
             void Randomize()
@@ -146,16 +156,24 @@ namespace pkNX.WinForms.Controls
                 var spec = EditUtil.Settings.Species;
                 spec.Gen2 = spec.Gen3 = spec.Gen4 = spec.Gen5 = spec.Gen6 = spec.Gen7 = false;
                 var srand = new SpeciesRandomizer(ROM.Info, ROM.Data.PersonalData);
-                srand.Initialize(spec);
+                var frand = new FormRandomizer(ROM.Data.PersonalData);
+                srand.Initialize(spec, 808, 809); // can only catch 1-151 in wild
                 foreach (var t in objs)
                 {
-                    t.Species = srand.GetRandomSpecies(t.Species);
-                    t.Form = Legal.GetRandomForme(t.Species, false, true, ROM.Data.PersonalData);
-                    t.RequiredSpecies = srand.GetRandomSpecies(t.RequiredSpecies);
+                    t.Species = (Species)srand.GetRandomSpecies((int)t.Species);
+                    t.RequiredSpecies = (Species)srand.GetRandomSpecies((int)t.Species);
+                    t.Form = frand.GetRandomForme((int)t.Species, false, false, true, false, ROM.Data.PersonalData.Table);
+                    t.RequiredForm = 0; // can't catch wild alolan forms
+                    t.Nature = Nature.Random - 1;
+                    t.Gender = FixedGender.Random;
+                    t.Shiny = Shiny.Random;
+                    t.RelearnMoves = new[] { 0, 0, 0, 0 };
+                    if (t.IV_HP != -4)
+                        t.IVs = new[] { -1, -1, -1, -1, -1, -1 };
                 }
             }
 
-            var form = new GenericEditor<EncounterTrade7b>(cache, names, "Trade Editor", Randomize);
+            using var form = new GenericEditor<EncounterTrade7b>(cache, names, "Trade Editor", Randomize);
             form.ShowDialog();
             if (!form.Modified)
                 file.CancelEdits();
@@ -168,7 +186,7 @@ namespace pkNX.WinForms.Controls
             var file = ROM[GameFile.EncounterStatic];
             var data = file[0];
             var objs = data.GetArray(z => new EncounterStatic7b(z), EncounterStatic7b.SIZE); // binary
-            var names = Enumerable.Range(0, objs.Length).Select(z => $"{z:00}").ToArray();
+            var names = Enumerable.Range(0, objs.Length).Select(z => $"{z:000}").ToArray();
             var cache = new DirectCache<EncounterStatic7b>(objs);
 
             void Randomize()
@@ -176,16 +194,23 @@ namespace pkNX.WinForms.Controls
                 var spec = EditUtil.Settings.Species;
                 spec.Gen2 = spec.Gen3 = spec.Gen4 = spec.Gen5 = spec.Gen6 = spec.Gen7 = false;
                 var srand = new SpeciesRandomizer(ROM.Info, ROM.Data.PersonalData);
+                var frand = new FormRandomizer(ROM.Data.PersonalData);
                 srand.Initialize(spec);
                 for (int i = 2; i < objs.Length; i++) // skip starters
                 {
                     var t = objs[i];
-                    t.Species = srand.GetRandomSpecies(t.Species);
-                    t.Form = Legal.GetRandomForme(t.Species, false, true, ROM.Data.PersonalData);
+                    t.Species = (Species)srand.GetRandomSpecies((int)t.Species);
+                    t.Form = frand.GetRandomForme((int)t.Species, false, false, true, false, ROM.Data.PersonalData.Table);
+                    t.Nature = Nature.Random25;
+                    t.Gender = FixedGender.Random;
+                    t.Shiny = Shiny.Random;
+                    t.RelearnMoves = new[] { 0, 0, 0, 0 };
+                    if (t.IV_HP != -4)
+                        t.IVs = new[] { -1, -1, -1, -1, -1, -1 };
                 }
             }
 
-            var form = new GenericEditor<EncounterStatic7b>(cache, names, "Static Encounter Editor", Randomize);
+            using var form = new GenericEditor<EncounterStatic7b>(cache, names, "Static Encounter Editor", Randomize);
             form.ShowDialog();
             if (!form.Modified)
                 file.CancelEdits();
@@ -193,32 +218,101 @@ namespace pkNX.WinForms.Controls
                 file[0] = objs.SelectMany(z => z.Write()).ToArray();
         }
 
-        public void EditWild()
+        public void EditWild_GP() => PopWildEdit(GameFile.WildData1);
+        public void EditWild_GE() => PopWildEdit(GameFile.WildData2);
+
+        private void PopWildEdit(GameFile type)
         {
-            var ofd = new OpenFileDialog { Filter = "json files (*.json)|*.json|All files (*.*)|*.*" };
-            if (ofd.ShowDialog() != DialogResult.OK)
-                return;
-            var path = ofd.FileName;
-            if (!File.Exists(path))
+            var file = ROM.GetFile(type);
+            var data = file[0];
+            var obj = FlatBufferConverter.DeserializeFrom<EncounterArchive7b>(data);
+
+            using var form = new GGWE(ROM, obj);
+            if (form.ShowDialog() != DialogResult.OK)
                 return;
 
-            if (Path.GetExtension(path) != ".json" || new FileInfo(path).Length > 350_000)
+            data = FlatBufferConverter.SerializeFrom(obj);
+            file[0] = data;
+        }
+
+        public void EditShinyRate()
+        {
+            var path = Path.Combine(ROM.PathExeFS, "main");
+            var data = FileMitm.ReadAllBytes(path);
+            var nso = new NSO(data);
+
+            var shiny = new ShinyRateGG(nso.DecompressedText);
+            if (!shiny.IsEditable)
             {
-                WinFormsUtil.Alert("Not an expected json file.");
+                WinFormsUtil.Alert("Not able to find shiny rate logic in ExeFS.");
                 return;
             }
-            var json = File.ReadAllText(path);
-            var form = new GGWE(ROM, json);
-            form.ShowDialog();
-            var result = form.Result;
-            if (string.IsNullOrWhiteSpace(result))
-                return; // no save
 
-            var sfd = new SaveFileDialog { Filter = "json files (*.json)|*.json|All files (*.*)|*.*" };
-            if (sfd.ShowDialog() != DialogResult.OK)
+            using var editor = new ShinyRate(shiny);
+            editor.ShowDialog();
+            if (!editor.Modified)
                 return;
-            path = sfd.FileName;
-            File.WriteAllText(path, result);
+
+            nso.DecompressedText = shiny.Data;
+            FileMitm.WriteAllBytes(path, nso.Write());
+        }
+
+        public void EditTM()
+        {
+            var path = Path.Combine(ROM.PathExeFS, "main");
+            var data = FileMitm.ReadAllBytes(path);
+            var list = new TMEditorGG(data);
+            if (!list.Valid)
+            {
+                WinFormsUtil.Alert("Not able to find tm data in ExeFS.");
+                return;
+            }
+
+            var moves = list.GetMoves();
+            var allowed = Legal.GetAllowedMoves(ROM.Game, ROM.Data.MoveData.Length);
+            var names = ROM.GetStrings(TextName.MoveNames);
+            using var editor = new TMList(moves, allowed, names);
+            editor.ShowDialog();
+            if (!editor.Modified)
+                return;
+
+            list.SetMoves(editor.FinalMoves);
+            data = list.Write();
+            FileMitm.WriteAllBytes(path, data);
+        }
+
+        public void EditTypeChart()
+        {
+            var path = Path.Combine(ROM.PathExeFS, "main");
+            var data = FileMitm.ReadAllBytes(path);
+            var nso = new NSO(data);
+
+            byte[] pattern = // N2nn3pia9transport18UnreliableProtocolE
+            {
+                0x4E, 0x32, 0x6E, 0x6E, 0x33, 0x70, 0x69, 0x61, 0x39, 0x74, 0x72, 0x61, 0x6E, 0x73, 0x70, 0x6F, 0x72,
+                0x74, 0x31, 0x38, 0x55, 0x6E, 0x72, 0x65, 0x6C, 0x69, 0x61, 0x62, 0x6C, 0x65, 0x50, 0x72, 0x6F, 0x74,
+                0x6F, 0x63, 0x6F, 0x6C, 0x45, 0x00
+            };
+            int ofs = CodePattern.IndexOfBytes(nso.DecompressedRO, pattern);
+            if (ofs < 0)
+            {
+                WinFormsUtil.Alert("Not able to find type chart data in ExeFS.");
+                return;
+            }
+            ofs += pattern.Length + 0x24; // 0x5B4C0C in lgpe 1.0 RO
+
+            var cdata = new byte[18 * 18];
+            var types = ROM.GetStrings(TextName.Types);
+            Array.Copy(nso.DecompressedRO, ofs, cdata, 0, cdata.Length);
+            var chart = new TypeChartEditor(cdata);
+            using var editor = new TypeChart(chart, types);
+            editor.ShowDialog();
+            if (!editor.Modified)
+                return;
+
+            chart.Data.CopyTo(nso.DecompressedRO, ofs);
+            data = nso.Write();
+            FileMitm.WriteAllBytes(path, data);
         }
     }
 }
